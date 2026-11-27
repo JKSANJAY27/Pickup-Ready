@@ -91,3 +91,72 @@ test('server: with a key, a turn goes through the agent and returns trace and se
   assert.ok(r.trace.some((t) => t.who === 'code' && /Salt/.test(t.text)));
   srv.close();
 });
+
+// A mock model that reacts to the previous tool result, like a real model would.
+const reactive = (fn) => ({ generate: async ({ contents, system }) => fn(contents, system) });
+const lastResult = (contents) => { const m = [...contents].reverse().find((c) => c.parts?.some((p) => p.functionResponse)); return m?.parts[0].functionResponse; };
+const lastUserText = (contents) => [...contents].reverse().find((c) => c.role === 'user' && c.parts[0].text)?.parts[0].text;
+
+test('same as last time: reproduces the previous order lines from SQLite', async () => {
+  const d = new Desk(openDb(':memory:'));
+  const a = new Agent(d, scripted(
+    call('propose_order', { lines: [{ product_id: 9, qty: 5 }, { product_id: 11, qty: 2 }] }), say('ஆமா?'), call('confirm_order', {}), say('சரி.')));
+  await a.turn(1, '5 sakkarai 2 tata tea'); await a.turn(1, 'aama');
+  assert.equal(d.orders().length, 1);
+  // second call: the model asks for the last order, then proposes exactly those lines
+  const llm = reactive((contents) => {
+    const res = lastResult(contents);
+    if (!res) return call('get_last_order', {});
+    if (res.name === 'get_last_order') return call('propose_order', { lines: res.response.lines.map((l) => ({ product_id: l.product_id, qty: l.qty })) });
+    return say('கடந்த முறை மாதிரி. ஆமா?');
+  });
+  const a2 = new Agent(d, llm);
+  const r = await a2.turn(1, 'same as last time');
+  assert.equal(r.pending.total, 5 * 46 + 2 * 540);
+  assert.ok(r.trace.some((t) => /Last order #1: 5 x Sugar 1kg, 2 x Tata Tea Gold 1kg/.test(t.text)));
+});
+
+test('last order is per retailer; new retailer has none', async () => {
+  const d = new Desk(openDb(':memory:'));
+  const a = new Agent(d, scripted(call('get_last_order', {}), say('இல்லை.')));
+  const r = await a.turn(3, 'usual');
+  assert.ok(r.trace.some((t) => /No earlier order/.test(t.text)));
+});
+
+test('caller context is bounded and includes recent orders and learned words', async () => {
+  const d = new Desk(openDb(':memory:'));
+  for (let i = 0; i < 6; i++) d.reserve({ retailerId: 1, items: [{ product: d.product(9), qty: 1 }], mode: 'x' });
+  d.db.prepare('INSERT INTO vocab_memory VALUES (1,?,9)').run('vellai');
+  let seen = '';
+  const a = new Agent(d, reactive((c, system) => { seen = system; return say('வணக்கம்.'); }));
+  await a.turn(1, 'hello');
+  assert.match(seen, /Recent orders/);
+  assert.equal((seen.match(/#\d+:/g) || []).length, 3); // last 3 only
+  assert.match(seen, /"vellai" = Sugar 1kg/);
+});
+
+test('suggestions: unknown word gets only real in-stock catalogue rows', async () => {
+  const d = new Desk(openDb(':memory:'));
+  const s1 = d.suggest('toor dhal');
+  assert.ok(s1.length >= 1 && s1[0].name === 'Toor Dal 1kg');
+  assert.deepEqual(d.suggest('dragon fruit'), []);          // nothing close: no invention
+  const names = new Set(d.products().map((p) => p.name));
+  for (const q of ['urad dhal', 'tea powder', 'wheat maavu', 'xyz']) for (const x of d.suggest(q)) { assert.ok(names.has(x.name)); assert.ok(x.stock > 0); }
+  // urad dal is out of stock, so it can never be suggested
+  assert.ok(!d.suggest('urad dhal').some((x) => x.name === 'Urad Dal 1kg'));
+});
+
+test('agent offers a real alternative for a non-catalogue item', async () => {
+  const d = new Desk(openDb(':memory:'));
+  const llm = reactive((contents) => {
+    const res = lastResult(contents);
+    if (!res) return call('lookup_item', { term: 'toor dhal', qty: 2 });
+    const first = res.response.suggestions?.[0];
+    return say(first ? `${first.name} irukku. Venuma?` : 'Illa.');
+  });
+  const r = await new Agent(d, llm).turn(1, '2 toor dhal');
+  assert.match(r.reply, /Toor Dal 1kg irukku/);
+  assert.ok(r.trace.some((t) => /Closest in-stock catalogue items: Toor Dal 1kg/.test(t.text)));
+  const none = await new Agent(d, reactive((c) => (lastResult(c) ? say(lastResult(c).response.suggestions.length ? 'x' : 'Illa.') : call('lookup_item', { term: 'dragon fruit' })))).turn(2, 'dragon fruit');
+  assert.equal(none.reply, 'Illa.');
+});

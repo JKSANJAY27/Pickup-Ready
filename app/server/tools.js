@@ -7,6 +7,8 @@ const row = (p) => ({ product_id: p.id, name: p.name, price: p.price, stock: p.s
 export const TOOL_DECLARATIONS = [
   { name: 'lookup_item', description: 'Match a word the retailer said (Tamil or English shop talk) to a catalogue product. Returns match, ambiguous (with options to ask about) or unknown. Always call this before naming any product, price or stock.',
     parameters: { type: 'OBJECT', properties: { term: { type: 'STRING' }, qty: { type: 'INTEGER' } }, required: ['term'] } },
+  { name: 'get_last_order', description: 'Return this retailer\'s most recent order lines (product ids, quantities, current price and stock). Use it when they say "same as last time" or "usual", then read the lines back with propose_order.',
+    parameters: { type: 'OBJECT', properties: {} } },
   { name: 'find_alternative', description: 'Find ONE in-stock alternative of the same kind and pack size for a product that is out of stock.',
     parameters: { type: 'OBJECT', properties: { product_id: { type: 'INTEGER' }, qty: { type: 'INTEGER' } }, required: ['product_id', 'qty'] } },
   { name: 'propose_order', description: 'Build the pending order from resolved product ids and quantities. Checks stock and returns the exact read-back lines and total to say to the retailer. Does NOT reserve.',
@@ -33,13 +35,24 @@ export function runTool(desk, s, name, args = {}, trace = []) {
     case 'lookup_item': {
       const term = norm(String(args.term || ''));
       const r = desk.resolve(s.retailerId, term);
-      if (r.kind === 'none') { T(`"${term}" is not a word I know. Not guessing`, { confidence: 0, unsure: true }); return { status: 'unknown', term }; }
+      if (r.kind === 'none') {
+        const suggestions = desk.suggest(term);
+        T(`"${term}" is not a word I know. Not guessing.${suggestions.length ? ` Closest in-stock catalogue items: ${suggestions.map((x) => x.name).join(', ')}` : ' No close catalogue item'}`, { confidence: 0, unsure: true });
+        return { status: 'unknown', term, suggestions, note: 'suggestions are real in-stock catalogue rows, offer them as a question, never as a fact about what the word means' };
+      }
       if (r.kind === 'ask') { T(`"${term}" could be ${r.options.length} products. Asking the retailer, not guessing`, { confidence: r.confidence, unsure: true }); return { status: 'ambiguous', options: r.options.map(row) }; }
       const p = desk.product(r.product.id);
       T(`"${term}" matched to ${p.name} via ${r.via}. Stock ${p.stock}`, { confidence: r.confidence, unsure: r.confidence < 0.9 });
       const key = `oos:${p.id}`;
       if (p.stock <= 0 && !s.seen.has(key)) { s.seen.add(key); desk.unmet(s.retailerId, term, p.id, 'out_of_stock', qty); }
       return { status: 'match', ...row(p), in_stock: p.stock > 0, match_confidence: r.confidence };
+    }
+    case 'get_last_order': {
+      const last = desk.recentOrders(s.retailerId, 1)[0];
+      if (!last) { T('No earlier order found for this retailer', { unsure: true }); return { found: false }; }
+      const lines = last.lines.map((l) => { const p = desk.product(l.product_id); return { ...row(p), qty: l.qty, in_stock: p.stock >= l.qty }; });
+      T(`Last order #${last.id}: ${lines.map((l) => `${l.qty} x ${l.name}`).join(', ')}`);
+      return { found: true, order_id: last.id, lines };
     }
     case 'find_alternative': {
       const p = desk.product(Number(args.product_id));

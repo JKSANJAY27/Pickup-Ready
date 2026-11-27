@@ -38,6 +38,25 @@ export class Desk {
     return { kind: 'none' };
   }
 
+  // Closest in-stock catalogue rows to an unknown word. Pure string similarity over real rows: it can never invent a product.
+  suggest(term, limit = 2) {
+    const tri = (x) => { const s = `  ${norm(x)} `; const set = new Set(); for (let i = 0; i < s.length - 2; i++) set.add(s.slice(i, i + 3)); return set; };
+    const jac = (a, b) => { let n = 0; for (const x of a) if (b.has(x)) n++; return n / (a.size + b.size - n || 1); };
+    const t = tri(term);
+    return this.products().filter((p) => p.stock > 0).map((p) => {
+      const sim = Math.max(...[p.name, ...p.aliases].map((a) => jac(t, tri(a))));
+      return { product: p, sim };
+    }).filter((x) => x.sim >= 0.35).sort((a, b) => b.sim - a.sim).slice(0, limit)
+      .map((x) => ({ product_id: x.product.id, name: x.product.name, price: x.product.price, stock: x.product.stock, similarity: Math.round(x.sim * 100) / 100 }));
+  }
+
+  // Recent orders for one retailer, newest first, with lines.
+  recentOrders(retailerId, n = 3) {
+    return this.db.prepare("SELECT * FROM orders WHERE retailer_id=? AND status IN ('reserved','billed') ORDER BY id DESC LIMIT ?").all(retailerId, n).map((o) => ({
+      id: o.id, created_at: o.created_at, status: o.status,
+      lines: this.db.prepare('SELECT l.product_id, l.qty, p.name FROM order_lines l JOIN products p ON p.id=l.product_id WHERE order_id=?').all(o.id) }));
+  }
+
   unmet(retailerId, term, productId, kind, qty) {
     this.db.prepare('INSERT INTO unmet_demand (retailer_id, term, product_id, kind, qty, created_at) VALUES (?,?,?,?,?,?)')
       .run(retailerId, term, productId ?? null, kind, qty, now());
