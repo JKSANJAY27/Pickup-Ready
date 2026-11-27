@@ -5,7 +5,7 @@ const NUM_WORDS = { onnu: 1, oru: 1, rendu: 2, moonu: 3, naalu: 4, anju: 5, aaru
 const YES = ['aama', 'aam', 'yes', 'ok', 'sari', 'seri', 'confirm', 'ஆமா', 'ஆம்', 'சரி'];
 const NO = ['illa', 'venam', 'no', 'vendam', 'இல்ல', 'வேண்டாம்'];
 
-export const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
+export const norm = (s) => s.toLowerCase().replace(/[^\p{L}\p{M}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim();
 export const isYes = (t) => norm(t).split(' ').some((w) => YES.includes(w));
 export const isNo = (t) => norm(t).split(' ').some((w) => NO.includes(w));
 

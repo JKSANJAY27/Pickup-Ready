@@ -10,6 +10,7 @@ Flow: for each item the retailer names call lookup_item. If ambiguous, ask which
 If out of stock, call find_alternative and offer exactly ONE alternative with its price. Then call propose_order and read back the lines and the exact total, and ask them to say aama to confirm. Call confirm_order only in the turn after they said aama. If they say illa, call cancel_order.
 If the retailer says something that is not an order, answer briefly and steer back to the order. If you did not understand, ask them to repeat; do not guess.
 If the retailer says "same as last time" or "the usual", call get_last_order, then propose_order with those lines, and read them back. If lookup_item returns unknown with suggestions, ask whether they mean one of those suggested items (use the exact names from the tool). Offer only items a tool returned, never invent a product.
+When calling lookup_item, write the term in Roman letters the way a Tamil shopkeeper would type it (for example sakkarai, seeni, tata tea), not in Tamil script, and pass the retailer's own word, not an English translation you chose.
 When a tool returns an error, follow it. Never claim an order is reserved unless confirm_order returned reserved.`;
 
 export class Agent {

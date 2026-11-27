@@ -4,7 +4,7 @@
 import { TOOL_DECLARATIONS, newSession, startTurn, runTool } from './tools.js';
 import { SYSTEM_PROMPT } from './agent.js';
 
-export const liveModel = () => process.env.GEMINI_LIVE_MODEL || 'gemini-live-2.5-flash-native-audio'; // placeholder until checked against the key
+export const liveModel = () => process.env.GEMINI_LIVE_MODEL || 'gemini-3.1-flash-live-preview'; // verified with a real AI Studio key on Nov 27
 const URL_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 
 export class LiveSession {
@@ -36,7 +36,9 @@ export class LiveSession {
   }
   flush() { if (this.outBuf.trim()) this.agent.log(this.retailerId, 'desk', this.outBuf.trim()); this.outBuf = ''; }
   async onMessage(raw) {
-    let m; try { m = JSON.parse(typeof raw === 'string' ? raw : Buffer.from(raw).toString('utf8')); } catch { return; }
+    // Gemini sends JSON in binary frames; Node's WebSocket delivers those as Blob.
+    if (typeof raw !== 'string') raw = typeof raw.text === 'function' ? await raw.text() : Buffer.from(raw).toString('utf8');
+    let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.setupComplete) { this.ready = true; return this.emit({ type: 'ready' }); }
     const sc = m.serverContent;
     if (sc) {

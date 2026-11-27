@@ -160,3 +160,9 @@ test('agent offers a real alternative for a non-catalogue item', async () => {
   const none = await new Agent(d, reactive((c) => (lastResult(c) ? say(lastResult(c).response.suggestions.length ? 'x' : 'Illa.') : call('lookup_item', { term: 'dragon fruit' })))).turn(2, 'dragon fruit');
   assert.equal(none.reply, 'Illa.');
 });
+
+test('Tamil-script yes words count as yes (combining marks survive normalisation)', async () => {
+  const { isYes } = await import('./interpreter.js');
+  for (const w of ['ஆமா', 'ஆம்', 'சரி', 'ஆமா, சரிங்க']) assert.ok(isYes(w), w);
+  assert.ok(!isYes('இல்ல'));
+});

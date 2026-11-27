@@ -1,19 +1,4 @@
-> **New here? Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first.** It explains how the whole system fits.
-
-## Quickstart
-
-```
-docker compose up --build
-```
-Open http://localhost:3000. No `.env` is needed; keyed features show "key not set".
-
-Owner tab: restock an out-of-stock product and every retailer who asked for it gets one back-in-stock message.
-
-Environment variables (see `.env.example`, placeholders only): `GEMINI_API_KEY` (optional, live interpretation), `GEMINI_TEXT_MODEL` (optional, model id your key can call).
-
-Run tests: `cd app && node --test server/desk.test.js` (Node 22). Run the deterministic evaluation: `cd app && node eval/run.js` (see docs/evaluation/SYSTEM_EVALUATION.md).
-
----
+> **New here? Start with "Run it" below, then read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (how everything fits).**
 
 # Pickup Ready
 
@@ -59,82 +44,64 @@ Orders already happen over the phone in Tamil shop-talk (moodai, tin, vaati). Re
 
 ---
 
-## How to Run (Docker)
+## Run it (for someone cloning cold)
 
+**Prerequisites** (pick one):
+- Docker with Compose v2 (Docker Desktop is fine). Nothing else to install.
+- or Node.js 22 or newer (no npm install needed, the app has zero dependencies).
+
+**Start with Docker:**
 ```bash
-# 1. Clone
 git clone https://github.com/JKSANJAY27/Pickup-Ready.git
 cd Pickup-Ready
+docker compose up --build
+```
+Open **http://localhost:3000**. No `.env` and no key are needed to start. The three tabs are at the top: **Call** (first tab, the retailer's voice call), **Packer**, **Owner**.
 
-# 2. Configure env vars (see Required Environment Variables below)
-cp .env.example .env
-# Edit .env with your values
-
-# 3. Start
-docker compose up
-
-# App is available at http://localhost:3000
+**Start without Docker:**
+```bash
+cd app && node --no-warnings server/index.js     # http://localhost:3000
 ```
 
-### Required Environment Variables
+**What "key not set" means:** the Call tab talks to Google Gemini, which needs a free API key. Without one the app still starts, Packer and Owner work, and the Call tab shows **"key not set"** instead of pretending. Nothing is faked.
 
-| Variable | Description |
-|----------|-------------|
-| `AI_API_KEY` | LLM API key (Gemini / OpenAI / Anthropic — free tier is enough for demo volume) |
-| `AI_MODEL` | Model name (e.g. `gemini-pro`, `gpt-4o-mini`) |
+**Turn on the live AI call:**
+1. Get a free key at https://aistudio.google.com/apikey (Google AI Studio).
+2. `cp .env.example .env` and set `GEMINI_API_KEY=` to your key. Never commit `.env` (it is git-ignored).
+3. `docker compose up --build` again (or restart node with the variable set: `GEMINI_API_KEY=... node --no-warnings server/index.js`).
+4. Call tab: choose a retailer, then either
+   - **Start call (Tamil)**: Chrome listens (ta-IN), Gemini answers, your browser speaks the reply. Use Chrome. Or
+   - **Live voice call (speech-to-speech)**: Gemini Live handles the audio both ways. Use headphones to avoid echo. Or
+   - type in the box.
+   Allow the microphone when Chrome asks. Say "aama" to confirm an order; nothing is reserved before that.
 
-> [!IMPORTANT]
-> API keys are **never committed** to this repository. Set them in `.env` only. The app disables live AI interpretation (not silently fakes it) when the key is missing.
+| Variable | Needed? | Meaning |
+|---|---|---|
+| `GEMINI_API_KEY` | for the Call tab | Google AI Studio key. Stays on the server, never sent to the browser. |
+| `GEMINI_TEXT_MODEL` | optional | Default `gemini-3.5-flash-lite` (verified with a real key). |
+| `GEMINI_LIVE_MODEL` | optional | Default `gemini-3.1-flash-live-preview` (verified with a real key). |
 
----
+Note: the free tier is rate limited (about 15 text requests per minute at the time of testing). A 429 error in the Call tab means wait a few seconds. Model ids come and go; `node app/scripts/spike.js` (with `GEMINI_API_KEY` set) lists what your key can call.
 
-## Project Structure
-
+**Tests and evaluation (Node 22):**
+```bash
+cd app
+node --no-warnings --test server/*.test.js    # unit and integration tests, mock model, no key needed
+node --no-warnings eval/run.js                # deterministic evaluation harness, no key needed
 ```
-pickup-ready/
-├── README.md                        ← You are here
-├── docker-compose.yml               ← Scaler/Wispr template compose file
-├── .env.example                     ← Env var names (no values)
-│
-├── app/                             ← Application source
-│   ├── client/                      ← React + TypeScript + Tailwind frontend
-│   │   ├── src/
-│   │   │   ├── tabs/
-│   │   │   │   ├── CallTab/         ← Retailer call (dialer-style)
-│   │   │   │   ├── PackerTab/       ← Packer live list
-│   │   │   │   └── OwnerTab/        ← Owner analytics
-│   │   │   ├── components/
-│   │   │   └── App.tsx
-│   └── server/                      ← Node.js JSON API
-│       ├── routes/
-│       │   ├── orders.ts
-│       │   ├── stock.ts
-│       │   ├── ai.ts                ← AI interpreter (key lives here, server-side only)
-│       │   └── analytics.ts
-│       ├── db/
-│       │   ├── schema.sql
-│       │   └── seed.sql             ← 25 products, 3 retailers
-│       └── server.ts
-│
-└── docs/                            ← All documentation for agents and humans
-    ├── architecture/
-    │   └── ARCHITECTURE.md          ← System design, layers, DB schema, tech stack
-    ├── evaluation/
-    │   └── EVALUATION.md            ← All 19 edge cases, guard rules, acceptance tests
-    ├── voice-data-insights/
-    │   └── VOICE_DATA_INSIGHTS.md   ← Seven owner signals, demand analytics
-    ├── research/
-    │   ├── COMPETITIVE_LANDSCAPE.md ← VaaniAI, Custography, Udyant, VIKMO, PlugDrop
-    │   ├── WHOLESALER_RESEARCH.md   ← Who buys, how relationships work, growth vectors
-    │   ├── ALIAS_AND_PLATFORM.md    ← Alias system design; vs ElevenLabs/Sarvam
-    │   └── WISPR_FLOW_SCAN.md       ← Wispr Flow capabilities and our use of it
-    ├── build-guide/
-    │   └── BUILD_GUIDE.md           ← Docker-first setup, submission checklist, day plan
-    ├── demo/
-    │   └── DEMO_SCRIPT.md           ← YouTube walkthrough script (~2.5 min)
-    └── pitch-deck/
-        └── PITCH_DECK.md            ← Full slide-by-slide deck content (Draft v3)
+Reset the demo data any time with the "Reset demo data" button on the Call tab.
+
+## Repo map
 ```
+docker-compose.yml, .env.example
+app/server/   Node server: index.js (HTTP), agent.js + llm.js + tools.js (AI layer), live.js (Gemini Live relay),
+              desk.js (all stock/money logic), db.js + seed.js (SQLite), interpreter.js, *.test.js
+app/public/   Plain HTML/JS UI (Call, Packer, Owner tabs)
+app/eval/     Deterministic evaluation harness
+app/scripts/  spike.js (lists models your key can call)
+docs/         ARCHITECTURE.md (start here), plus architecture/, evaluation/, demo/, research/, pitch-deck/, build-guide/, voice-data-insights/
+```
+Some docs under `docs/` (for example `docs/architecture/` and `docs/build-guide/`) are the original plan written before the build. Where they differ from `docs/ARCHITECTURE.md` or this README, the code and these two files win.
 
 ---
 

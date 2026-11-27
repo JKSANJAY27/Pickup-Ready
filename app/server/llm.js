@@ -1,5 +1,5 @@
 // Gemini text client with function calling (REST). Isolated so tests can swap in a mock with the same generate() shape.
-export const textModel = () => process.env.GEMINI_TEXT_MODEL || 'gemini-2.0-flash';
+export const textModel = () => process.env.GEMINI_TEXT_MODEL || 'gemini-3.5-flash-lite';
 export const keySet = () => Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('your_'));
 
 export const geminiClient = {
