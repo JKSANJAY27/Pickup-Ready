@@ -39,9 +39,25 @@ test('full flow: reserve, add mid-packing, bill', async () => {
   assert.equal(d.pack(r.order_id), null);
 });
 
+test('vocabulary: unknown term asked, saved only after confirmation, then reused', async () => {
+  const d = fresh();
+  let r = await d.turn(1, '2 vellai');
+  assert.equal(r.awaiting, 'learn');
+  r = await d.turn(1, 'sugar 1kg'.replace('sugar 1kg', 'sakkarai'));
+  assert.equal(r.awaiting, 'learn_confirm');
+  assert.equal(d.db.prepare('SELECT COUNT(*) c FROM vocab_memory').get().c, 0);
+  r = await d.turn(1, 'aama');
+  assert.equal(r.awaiting, 'confirm');
+  await d.turn(1, 'aama');
+  r = await d.turn(1, '1 vellai');
+  assert.equal(r.awaiting, 'confirm'); // remembered, no question
+});
+
 test('not carried and chit-chat', async () => {
   const d = fresh();
   let r = await d.turn(1, 'dragon fruit');
+  assert.equal(r.awaiting, 'learn');
+  r = await d.turn(1, 'illa');
   assert.ok(d.owner().unmet.some((u) => u.kind === 'not_carried'));
   r = await d.turn(2, '');
   assert.equal(r.awaiting, null);

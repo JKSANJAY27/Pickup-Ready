@@ -53,7 +53,10 @@ export class Desk {
       const item = s.queue[0];
       if (!item.product) {
         const r = this.resolve(s.retailerId, item.term);
-        if (r.kind === 'none') { this.unmet(s.retailerId, item.term, null, 'not_carried', item.qty); s.notes.push({ ta: `${item.term} எங்ககிட்ட இல்லை.`, en: `We don't carry "${item.term}".` }); s.queue.shift(); continue; }
+        if (r.kind === 'none') {
+          if (!item.asked) { item.asked = true; s.awaiting = { type: 'learn' }; return this.say(s, `"${item.term}" என்றால் எந்த பொருள்?`, `Which product do you mean by "${item.term}"? (say its name, or illa if we don't carry it)`); }
+          this.unmet(s.retailerId, item.term, null, 'not_carried', item.qty); s.notes.push({ ta: `${item.term} எங்ககிட்ட இல்லை.`, en: `We don't carry "${item.term}".` }); s.queue.shift(); continue;
+        }
         if (r.kind === 'ask') { s.awaiting = { type: 'choose', options: r.options, category: r.category }; return this.say(s, `எந்த ${r.category}? ${r.options.map((o) => o.name).join(' / ')}`, `Which ${r.category}? ${r.options.map((o) => o.name).join(' / ')}`); }
         item.product = r.product;
       }
@@ -101,6 +104,19 @@ export class Desk {
       this.db.prepare('INSERT OR REPLACE INTO brand_memory VALUES (?,?,?)').run(s.retailerId, a.category, pick.id);
       s.queue[0].product = pick; s.awaiting = null;
       return this.advance(s);
+    }
+    if (a.type === 'learn') {
+      // Look up the unfamiliar term first; only save its meaning after the retailer confirms it.
+      const item = s.queue[0];
+      const r = isNo(text) ? { kind: 'none' } : this.resolve(s.retailerId, text);
+      if (r.kind === 'match') { s.awaiting = { type: 'learn_confirm', product: r.product }; return this.say(s, `"${item.term}" = ${r.product.name}. சரியா? (ஆமா/இல்ல)`, `Save "${item.term}" as ${r.product.name} for you? (aama / illa)`); }
+      s.awaiting = null; return this.advance(s);
+    }
+    if (a.type === 'learn_confirm') {
+      const item = s.queue[0];
+      if (isYes(text)) { this.db.prepare('INSERT OR REPLACE INTO vocab_memory VALUES (?,?,?)').run(s.retailerId, norm(item.term), a.product.id); item.product = a.product; s.awaiting = null; return this.advance(s); }
+      if (isNo(text)) { s.awaiting = null; return this.advance(s); }
+      return this.say(s, 'ஆமா அல்லது இல்ல சொல்லுங்க.', 'Please say aama (yes) or illa (no).');
     }
     if (a.type === 'alt') {
       const item = s.queue[0];
