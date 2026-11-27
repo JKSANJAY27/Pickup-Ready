@@ -229,6 +229,6 @@ export class Desk {
     const o = this.owner();
     const lost = o.unmet.filter((u) => u.kind !== 'declined_substitute');
     if (!lost.length) return 'No unmet demand recorded yet.';
-    return 'Requested but we could not sell: ' + lost.slice(0, 5).map((u) => `${u.item} (${u.qty}, ${u.kind.replace('_', ' ')})`).join('; ') + '.';
+    return 'Requested but we could not sell: ' + lost.slice(0, 5).map((u) => `${u.item} (${u.qty}, ${u.kind.replaceAll('_', ' ')})`).join('; ') + '.';
   }
 }
