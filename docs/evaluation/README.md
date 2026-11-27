@@ -28,3 +28,5 @@ The Sunday demo should deliberately show 2–3 edge cases live:
 - **#11** — mid-order correction
 
 Judges scoring "error handling" will be looking for exactly this list.
+
+- [System evaluation: metrics and how they are computed](SYSTEM_EVALUATION.md)

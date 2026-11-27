@@ -7,7 +7,7 @@ Open http://localhost:3000. No `.env` is needed; keyed features show "key not se
 
 Environment variables (see `.env.example`, placeholders only): `GEMINI_API_KEY` (optional, live interpretation), `GEMINI_MODEL` (optional).
 
-Run tests: `cd app && node --test server/desk.test.js` (Node 22).
+Run tests: `cd app && node --test server/desk.test.js` (Node 22). Run the deterministic evaluation: `cd app && node eval/run.js` (see docs/evaluation/SYSTEM_EVALUATION.md).
 
 ---
 
