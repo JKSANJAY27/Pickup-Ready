@@ -1,0 +1,33 @@
+// Seed data: 25 products, 3 retailers. Aliases are shop-talk words (Tamil in Latin script + English brands).
+export const PRODUCTS = [
+  ['Idhayam Sesame Oil 1L', 'oil', ['nallennai', 'nalla ennai', 'idhayam', 'sesame oil'], 1, 220, 40],
+  ['Gold Winner Sunflower Oil 1L', 'oil', ['sunflower oil', 'gold winner', 'sunflower'], 1, 140, 60],
+  ['Gold Winner Sunflower Oil 15L Tin', 'oil', ['oil tin', 'tin', 'vaati'], 15, 2050, 8],
+  ['Ponni Rice 26kg Bag', 'rice', ['ponni', 'arisi', 'rice', 'moodai'], 26, 1450, 30],
+  ['Idli Rice 26kg Bag', 'rice', ['idli arisi', 'idli rice'], 26, 1380, 12],
+  ['Toor Dal 1kg', 'dal', ['thuvaram paruppu', 'toor dal', 'tur dal'], 1, 165, 50],
+  ['Urad Dal 1kg', 'dal', ['ulundhu', 'urad dal', 'ulutham paruppu'], 1, 150, 0],
+  ['Moong Dal 1kg', 'dal', ['pasi paruppu', 'moong dal'], 1, 130, 35],
+  ['Sugar 1kg', 'sugar', ['sakkarai', 'sugar', 'seeni'], 1, 46, 200],
+  ['Sugar 50kg Bag', 'sugar', ['sugar moodai', 'sugar bag'], 50, 2250, 10],
+  ['Tata Tea Gold 1kg', 'tea', ['tata tea', 'tea gold', 'tea'], 1, 540, 14],
+  ['Brooke Bond Red Label Tea 1kg', 'tea', ['red label', 'brooke bond'], 1, 520, 0],
+  ['Aachi Chilli Powder 500g', 'masala', ['milagai thool', 'chilli powder', 'aachi'], 0.5, 160, 40],
+  ['Turmeric Powder 500g', 'masala', ['manjal thool', 'turmeric', 'manjal'], 0.5, 110, 45],
+  ['Coriander Powder 500g', 'masala', ['malli thool', 'coriander powder'], 0.5, 95, 30],
+  ['Tamarind 1kg', 'spice', ['puli', 'tamarind'], 1, 150, 25],
+  ['Mustard Seeds 1kg', 'spice', ['kadugu', 'mustard'], 1, 120, 20],
+  ['Salt 1kg', 'salt', ['uppu', 'salt'], 1, 22, 150],
+  ['Wheat Flour (Atta) 5kg', 'flour', ['atta', 'godhumai maavu', 'wheat flour'], 5, 260, 30],
+  ['Rava 1kg', 'flour', ['rava', 'sooji'], 1, 48, 60],
+  ['Parle-G Biscuit Carton', 'biscuit', ['parle g', 'parle-g', 'biscuit'], 1, 480, 18],
+  ['Maggi Noodles Carton', 'snack', ['maggi', 'noodles'], 1, 840, 9],
+  ['Surf Excel 1kg', 'soap', ['surf excel', 'surf'], 1, 130, 40],
+  ['Lifebuoy Soap 4-pack', 'soap', ['lifebuoy', 'soap'], 1, 140, 55],
+  ['Coconut Oil 1L', 'oil', ['thengai ennai', 'coconut oil', 'parachute'], 1, 210, 22],
+];
+export const RETAILERS = [
+  ['Murugan Stores', 'Gudiyatham'],
+  ['Selvi Provisions', 'Katpadi'],
+  ['Annai Kirana', 'Vellore'],
+];

@@ -1,0 +1,15 @@
+services:
+  app:
+    build: ./app
+    ports:
+      - "3000:3000"
+    # .env is optional: the app starts and shows its main screen without it.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "3000"
+    volumes:
+      - pickup-data:/data
+volumes:
+  pickup-data:

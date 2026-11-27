@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickup Ready</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><h1>Pickup Ready</h1><span class="tag">Speak your order. Travel only when it's reserved.</span>
+<span id="ai" class="badge"></span></header>
+<nav><button data-tab="call" class="on">Call</button><button data-tab="packer">Packer</button><button data-tab="owner">Owner</button></nav>
+<main>
+<section id="call">
+  <p class="note">Prototype of the phone experience: a browser-simulated call. The AI talks; every stock, order and bill action runs in the desk code. Real product = a normal phone call to the shop.</p>
+  <p id="keynote" class="note" hidden><b>Key not set.</b> The call needs GEMINI_API_KEY in .env (see .env.example). Everything else in the app still works.</p>
+  <label>Retailer <select id="retailer"></select></label>
+  <div id="log" class="log"></div>
+  <div class="row"><button id="live">🎙 Live voice call (speech-to-speech)</button> <button id="mic">🎤 Start call (Tamil)</button>
+  <label class="note"><input type="checkbox" id="headset"> Headset (allow interrupting)</label>
+  <span id="status" class="note"></span></div>
+  <div class="row"><input id="text" placeholder="Or type what the retailer says" autocomplete="off"><button id="send">Send</button></div>
+  <p class="note" id="voicenote"></p>
+  <h3>How the system decided <small>(AI proposes, code decides, the retailer's "aama" is the gate)</small></h3>
+  <div id="trace" class="trace"><p class="note">Steps appear here as you talk.</p></div>
+  <h3>What it has learned <small>(per retailer, saved only after confirmation)</small></h3>
+  <div id="memory" class="trace"></div>
+  <p><button id="reset">Reset demo data</button> <button id="transcript-btn">Show call transcripts</button></p>
+  <pre id="transcript" class="trace"></pre>
+</section>
+<section id="packer" hidden>
+  <div id="orders"></div>
+</section>
+<section id="owner" hidden>
+  <button id="ask">What did people want that I couldn't sell?</button>
+  <p id="answer" class="answer"></p><h3>Restock insights <small>(counted from call records, last 7 days)</small></h3>
+  <div id="insights" class="trace"></div>
+  <div id="owner-table"></div>
+  <h3>Restock <small>(retailers who asked for it while it was out are notified once)</small></h3>
+  <div class="row"><select id="rs-product"></select><input id="rs-qty" type="number" value="20" min="1" style="max-width:80px"><button id="rs-go">Restock</button></div>
+  <div id="notifs" class="trace"></div>
+</section>
+</main>
+<script src="/live.js"></script>
+<script src="/app.js"></script></body></html>
