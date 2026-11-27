@@ -75,3 +75,9 @@ test('http: live start without a key is 503 key_not_set (compose with no .env st
   assert.equal(r.status, 503);
   app.close();
 });
+
+test('live: binary (Blob) frames from Node WebSocket are decoded', async () => {
+  const { ws, events } = setup();
+  await ws.onmessage({ data: new Blob([JSON.stringify({ setupComplete: {} })]) });
+  assert.ok(events.some((e) => e.type === 'ready'));
+});

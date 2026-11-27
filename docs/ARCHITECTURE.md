@@ -70,23 +70,24 @@ Computed from the same tables, no AI: unmet demand ranking (what retailers asked
 
 ## Voice paths
 - Path A (built): Chrome ta-IN speech-to-text, Gemini text function calling, browser speechSynthesis. One key, `GEMINI_API_KEY`. Headset checkbox allows barge-in; stale replies are dropped by generation id.
-- Path B (built, mocked tests only): Gemini Live native speech-to-speech. Browser (`public/live.js`) captures mic audio with an AudioWorklet, downsamples to 16 kHz PCM and POSTs ~100 ms chunks to `/api/live/audio`. `server/live.js` relays them to a Gemini Live WebSocket (Node 22's built-in `WebSocket`, no npm dependency), asks for Tamil (`ta-IN`) audio replies, and streams 24 kHz PCM back to the browser over server-sent events (`/api/live/events`), where it is played gaplessly. Barge-in: Gemini's `interrupted` event stops playback. Setup message carries the same system prompt, caller context and tool declarations as Path A.
+- Path B (built; verified once against a real AI Studio key on Nov 27: Tamil transcripts, tool calls and the aama gate worked end to end; the browser mic/playback is still untested): Gemini Live native speech-to-speech. Browser (`public/live.js`) captures mic audio with an AudioWorklet, downsamples to 16 kHz PCM and POSTs ~100 ms chunks to `/api/live/audio`. `server/live.js` relays them to a Gemini Live WebSocket (Node 22's built-in `WebSocket`, no npm dependency), asks for Tamil (`ta-IN`) audio replies, and streams 24 kHz PCM back to the browser over server-sent events (`/api/live/events`), where it is played gaplessly. Barge-in: Gemini's `interrupted` event stops playback. Setup message carries the same system prompt, caller context and tool declarations as Path A.
   - Same tools, same gates: Live `toolCall`s run through `runTool`. The "aama" gate is armed from Gemini's *input transcription* of what the retailer said. If the transcript is missing or does not contain a yes, the gate stays shut (fails closed; the cost is that a mis-transcribed yes needs repeating).
   - Both sides of the call are written to `call_transcripts`.
   - Start it with the "Live voice call" button on the Call tab. Needs a key.
-  - Unverified: the model id (`GEMINI_LIVE_MODEL`, default `gemini-live-2.5-flash-native-audio` is from Vertex docs, not checked against an AI Studio key), Tamil quality, latency, the browser mic path. Run `node scripts/spike.js` with the key to list callable models.
+  - Verified models (AI Studio key, Nov 27): text `gemini-3.5-flash-lite` (about 1 to 2 s per turn; `gemini-3.5-flash` works but took 10 to 40 s; `gemini-2.5-flash` returns 404 for new users), Live `gemini-3.1-flash-live-preview` and `gemini-3.8-live` (both accept `ta-IN`; `gemini-2.5-flash-native-audio-latest` rejects `ta-IN`). Free tier is limited to about 15 text requests per minute.
+  - Still unverified: browser mic and playback, speaker echo handling, docker compose on a real machine.
   - Path A vs B: A is easier to debug and always has a text trace; B is lower latency and sounds more natural but depends on transcription for the yes gate.
 
 ## Run it
 ```
 docker compose up --build        # http://localhost:3000, no .env needed
 ```
-Without a key the Call tab shows "key not set". With a key: copy `.env.example` to `.env`, set `GEMINI_API_KEY` and `GEMINI_TEXT_MODEL` (the default is a placeholder; list the models your key can call and set a real id). The key stays server-side.
+Without a key the Call tab shows "key not set". With a key: copy `.env.example` to `.env`, set `GEMINI_API_KEY` and `GEMINI_TEXT_MODEL` and `GEMINI_LIVE_MODEL` only if you want other models (defaults are verified). The key stays server-side.
 
 Tests: `cd app && node --no-warnings --test server/*.test.js` (Node 22). Eval: `cd app && node --no-warnings eval/run.js`.
 
 ## Not yet verified by anyone (be aware)
-Real `docker compose up --build` on a real machine, Chrome's Tamil mic, a Tamil system voice, a real Gemini key and model id, latency, Tamil prompt quality. All tests use a mock model.
+Real `docker compose up --build` on a real machine, Chrome's Tamil mic, a Tamil system voice, Tamil prompt quality over many calls. Unit tests use a mock model; one real-key run is described above.
 
 ## Branches
 - `main`: docs only. Do not touch.
