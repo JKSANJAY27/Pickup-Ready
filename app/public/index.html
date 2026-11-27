@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pickup Ready</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><h1>Pickup Ready</h1><span class="tag">Speak your order. Travel only when it's reserved.</span>
+<span id="ai" class="badge"></span></header>
+<nav><button data-tab="call" class="on">Call</button><button data-tab="packer">Packer</button><button data-tab="owner">Owner</button></nav>
+<main>
+<section id="call">
+  <p class="note">Prototype of the phone experience: a browser-simulated call. Real product = a normal phone call to the shop.</p>
+  <label>Retailer <select id="retailer"></select></label>
+  <div id="log" class="log"></div>
+  <div class="row"><button id="mic">🎤 Speak (Tamil)</button>
+  <input id="text" placeholder="Or type what the retailer says, e.g. 5 sakkarai, 2 tata tea" autocomplete="off">
+  <button id="send">Send</button></div>
+  <p class="note" id="mode"></p>
+</section>
+<section id="packer" hidden>
+  <div id="orders"></div>
+</section>
+<section id="owner" hidden>
+  <button id="ask">What did people want that I couldn't sell?</button>
+  <p id="answer" class="answer"></p><div id="owner-table"></div>
+</section>
+</main>
+<script src="/app.js"></script></body></html>
