@@ -14,6 +14,11 @@
   <input id="text" placeholder="Or type what the retailer says, e.g. 5 sakkarai, 2 tata tea" autocomplete="off">
   <button id="send">Send</button></div>
   <p class="note" id="mode"></p>
+  <h3>How the system decided <small>(AI proposes, code decides, the retailer's "aama" is the gate)</small></h3>
+  <div id="trace" class="trace"><p class="note">Steps appear here as you talk.</p></div>
+  <h3>What it has learned <small>(per retailer, saved only after confirmation)</small></h3>
+  <div id="memory" class="trace"></div>
+  <p><button id="reset">Reset demo data</button></p>
 </section>
 <section id="packer" hidden>
   <div id="orders"></div>

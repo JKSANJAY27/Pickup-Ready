@@ -62,3 +62,25 @@ test('not carried and chit-chat', async () => {
   r = await d.turn(2, '');
   assert.equal(r.awaiting, null);
 });
+
+test('trace shows propose vs decide, unsure items, and the human gate', async () => {
+  const d = fresh();
+  let r = await d.turn(1, '3 oil');
+  assert.equal(r.trace[0].who, 'scripted');
+  assert.ok(r.trace.some((t) => t.who === 'code' && t.unsure));
+  r = await d.turn(1, 'sunflower');
+  assert.ok(r.trace.some((t) => t.who === 'learn'));
+  assert.ok(r.trace.some((t) => t.who === 'human'));
+  r = await d.turn(1, 'aama');
+  assert.ok(r.trace.some((t) => /never touched stock/.test(t.text)));
+  assert.equal(d.memory().brands.length, 1);
+});
+
+test('reset restores seed state', async () => {
+  const d = fresh();
+  await d.turn(1, '5 sakkarai'); await d.turn(1, 'aama');
+  d.reset();
+  assert.equal(d.orders().length, 0);
+  assert.equal(d.product(9).stock, 200);
+  assert.equal(d.products().length, 25);
+});

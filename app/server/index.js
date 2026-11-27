@@ -26,6 +26,8 @@ export function createApp(db = openDb()) {
       let m;
       if ((m = path.match(/^\/api\/orders\/(\d+)\/add$/)) && req.method === 'POST') { const b = await body(req); return json(res, 200, await desk.addToOrder(Number(m[1]), String(b.text || ''))); }
       if ((m = path.match(/^\/api\/orders\/(\d+)\/pack$/)) && req.method === 'POST') { const r = desk.pack(Number(m[1])); return r ? json(res, 200, r) : json(res, 409, { error: 'not open' }); }
+      if (path === '/api/memory') return json(res, 200, desk.memory());
+      if (path === '/api/reset' && req.method === 'POST') { desk.reset(); return json(res, 200, { ok: true }); }
       if (path === '/api/owner') return json(res, 200, { ...desk.owner(), answer: desk.ownerAnswer() });
       if (path.startsWith('/api/')) return json(res, 404, { error: 'not found' });
       const file = normalize(path === '/' ? '/index.html' : path).replace(/^(\.\.[/\\])+/, '');

@@ -27,8 +27,25 @@ async function send(text) {
   const r = await api('/api/call/turn', { retailer_id: Number($('#retailer').value), text });
   add('bot', r.reply_ta, r.reply_en);
   $('#mode').textContent = r.mode === 'live_ai' ? 'Interpreted by live AI' : 'Scripted sample, not live AI';
+  renderTrace(r.trace || []);
+  loadMemory();
   if (r.done && r.order_id) loadOrders();
 }
+const LABEL = { ai: 'AI proposes', scripted: 'Scripted', code: 'Code decides', human: 'Retailer gate', learn: 'Learned' };
+function renderTrace(steps) {
+  if (!steps.length) return;
+  const h = steps.map((t) => {
+    const conf = t.confidence !== undefined ? ` <small>(confidence ${Math.round(t.confidence * 100)}%)</small>` : '';
+    return `<div class="step"><span class="tag-${t.who}">${LABEL[t.who] || t.who}</span><span class="${t.unsure ? 'unsure' : ''}">${t.text.replace(/</g, '&lt;')}</span>${conf}</div>`;
+  }).join('');
+  $('#trace').innerHTML = h + ($('#trace').querySelector('.note') ? '' : '<hr>' + $('#trace').innerHTML);
+}
+async function loadMemory() {
+  const m = await api('/api/memory');
+  const rows = [...m.vocab.map((v) => `${v.retailer}: "${v.term}" means ${v.product}`), ...m.brands.map((b) => `${b.retailer}: ${b.category} is always ${b.product}`)];
+  $('#memory').innerHTML = rows.length ? rows.map((r) => `<div class="step">${r.replace(/</g, '&lt;')}</div>`).join('') : '<p class="note">Nothing learned yet.</p>';
+}
+$('#reset').onclick = async () => { await api('/api/reset', {}); $('#log').innerHTML = ''; $('#trace').innerHTML = '<p class="note">Steps appear here as you talk.</p>'; loadMemory(); loadOrders(); };
 $('#send').onclick = () => { const t = $('#text').value; $('#text').value = ''; send(t); };
 $('#text').onkeydown = (e) => { if (e.key === 'Enter') $('#send').click(); };
 
@@ -55,4 +72,4 @@ $('#ask').onclick = async () => {
   $('#answer').textContent = o.answer;
   $('#owner-table').innerHTML = `<table><tr><th>Item</th><th>Kind</th><th>Qty</th></tr>${o.unmet.map((u) => `<tr><td>${u.item}</td><td>${u.kind}</td><td>${u.qty}</td></tr>`).join('')}</table>`;
 };
-init();
+init().then(loadMemory);
