@@ -11,7 +11,7 @@
   <p id="keynote" class="note" hidden><b>Key not set.</b> The call needs GEMINI_API_KEY in .env (see .env.example). Everything else in the app still works.</p>
   <label>Retailer <select id="retailer"></select></label>
   <div id="log" class="log"></div>
-  <div class="row"><button id="mic">🎤 Start call (Tamil)</button>
+  <div class="row"><button id="live">🎙 Live voice call (speech-to-speech)</button> <button id="mic">🎤 Start call (Tamil)</button>
   <label class="note"><input type="checkbox" id="headset"> Headset (allow interrupting)</label>
   <span id="status" class="note"></span></div>
   <div class="row"><input id="text" placeholder="Or type what the retailer says" autocomplete="off"><button id="send">Send</button></div>
@@ -36,4 +36,5 @@
   <div id="notifs" class="trace"></div>
 </section>
 </main>
+<script src="/live.js"></script>
 <script src="/app.js"></script></body></html>

@@ -26,6 +26,8 @@ The model never sees a price, a stock number or a total unless a tool returned i
 |---|---|
 | `app/server/index.js` | HTTP server (zero dependencies, Node 22). `createApp(db, llm, hasKey)`. Routes: `/api/state`, `/api/agent/turn`, `/api/transcripts`, `/api/orders`, `/api/memory`, `/api/owner`, `/api/restock`, `/api/notifications`, `/api/config`, `/api/reset`, `/api/health`. |
 | `app/server/agent.js` | `Agent`: system prompt (Tamil, short sentences, tool-only facts), per-retailer session, tool loop (max 6 model rounds per turn), transcripts, bounded caller context. |
+| `app/server/live.js`, `app/public/live.js` | Path B: Gemini Live relay (server) and mic/playback (browser). |
+| `app/scripts/spike.js` | Lists the models a key can call. |
 | `app/server/llm.js` | Gemini REST client with function calling. Model id from `GEMINI_TEXT_MODEL`. |
 | `app/server/tools.js` | Tool declarations the model may call, and `runTool`, which enforces the gates. |
 | `app/server/desk.js` | The Desk: catalogue, matching, reserve, pack, restock, insights, suggestions, recent orders. All money/stock logic. Also holds an older scripted state machine kept only because the eval harness and desk tests use it. |
@@ -68,7 +70,12 @@ Computed from the same tables, no AI: unmet demand ranking (what retailers asked
 
 ## Voice paths
 - Path A (built): Chrome ta-IN speech-to-text, Gemini text function calling, browser speechSynthesis. One key, `GEMINI_API_KEY`. Headset checkbox allows barge-in; stale replies are dropped by generation id.
-- Path B (Gemini Live native speech-to-speech, same tools and gates): not built yet at the time of writing. Check the branch log.
+- Path B (built, mocked tests only): Gemini Live native speech-to-speech. Browser (`public/live.js`) captures mic audio with an AudioWorklet, downsamples to 16 kHz PCM and POSTs ~100 ms chunks to `/api/live/audio`. `server/live.js` relays them to a Gemini Live WebSocket (Node 22's built-in `WebSocket`, no npm dependency), asks for Tamil (`ta-IN`) audio replies, and streams 24 kHz PCM back to the browser over server-sent events (`/api/live/events`), where it is played gaplessly. Barge-in: Gemini's `interrupted` event stops playback. Setup message carries the same system prompt, caller context and tool declarations as Path A.
+  - Same tools, same gates: Live `toolCall`s run through `runTool`. The "aama" gate is armed from Gemini's *input transcription* of what the retailer said. If the transcript is missing or does not contain a yes, the gate stays shut (fails closed; the cost is that a mis-transcribed yes needs repeating).
+  - Both sides of the call are written to `call_transcripts`.
+  - Start it with the "Live voice call" button on the Call tab. Needs a key.
+  - Unverified: the model id (`GEMINI_LIVE_MODEL`, default `gemini-live-2.5-flash-native-audio` is from Vertex docs, not checked against an AI Studio key), Tamil quality, latency, the browser mic path. Run `node scripts/spike.js` with the key to list callable models.
+  - Path A vs B: A is easier to debug and always has a text trace; B is lower latency and sounds more natural but depends on transcription for the yes gate.
 
 ## Run it
 ```

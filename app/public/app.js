@@ -132,3 +132,25 @@ async function loadRestock() {
 }
 $('#rs-go').onclick = async () => { await api('/api/restock', { product_id: Number($('#rs-product').value), qty: Number($('#rs-qty').value) }); loadRestock(); };
 document.querySelector('[data-tab="owner"]').addEventListener('click', loadRestock);
+
+// Path B: Gemini Live speech-to-speech. The server relays audio; tool calls run through the same gates.
+let liveOn = false, liveBubble = { me: null, bot: null };
+$('#live').onclick = async () => {
+  if (liveOn) { await stopLive(); liveOn = false; $('#live').textContent = '🎙 Live voice call (speech-to-speech)'; $('#status').textContent = ''; return; }
+  if (!cfg.live_ai) { $('#keynote').hidden = false; return; }
+  try {
+    $('#status').textContent = 'connecting...';
+    await startLive(Number($('#retailer').value), (ev) => {
+      if (ev.type === 'ready') $('#status').textContent = 'live: speak now';
+      if (ev.type === 'retailer_text' || ev.type === 'desk_text') {
+        const k = ev.type === 'retailer_text' ? 'me' : 'bot';
+        if (!liveBubble[k] || !liveBubble[k].isConnected) { add(k, ''); liveBubble[k] = $('#log').lastChild; }
+        liveBubble[k].textContent = ev.text; $('#log').scrollTop = 1e9;
+      }
+      if (ev.type === 'turn_complete') liveBubble = { me: null, bot: null };
+      if (ev.type === 'trace') renderTrace(ev.trace);
+      if (ev.type === 'error' || ev.type === 'closed') $('#status').textContent = ev.message || 'call ended';
+    });
+    liveOn = true; $('#live').textContent = '⏹ End live call';
+  } catch (e) { $('#status').textContent = String(e.message || e); await stopLive(); }
+};
