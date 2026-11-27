@@ -84,3 +84,13 @@ test('reset restores seed state', async () => {
   assert.equal(d.product(9).stock, 200);
   assert.equal(d.products().length, 25);
 });
+
+test('back-in-stock: waiting retailer notified once, others not', async () => {
+  const d = fresh();
+  await d.turn(1, '2 urad dal'); await d.turn(1, 'illa');   // retailer 1 wanted Urad Dal while out
+  const r = d.restock(7, 10);
+  assert.equal(r.notified, 1);
+  assert.equal(d.notifications()[0].retailer_id, 1);
+  assert.equal(d.restock(7, 5).notified, 0); // already notified, and no longer out of stock
+  assert.equal(d.restock(1, 5).notified, 0);
+});

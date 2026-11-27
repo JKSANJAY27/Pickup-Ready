@@ -26,6 +26,9 @@
 <section id="owner" hidden>
   <button id="ask">What did people want that I couldn't sell?</button>
   <p id="answer" class="answer"></p><div id="owner-table"></div>
+  <h3>Restock <small>(retailers who asked for it while it was out are notified once)</small></h3>
+  <div class="row"><select id="rs-product"></select><input id="rs-qty" type="number" value="20" min="1" style="max-width:80px"><button id="rs-go">Restock</button></div>
+  <div id="notifs" class="trace"></div>
 </section>
 </main>
 <script src="/app.js"></script></body></html>

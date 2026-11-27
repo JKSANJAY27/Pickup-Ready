@@ -73,3 +73,12 @@ $('#ask').onclick = async () => {
   $('#owner-table').innerHTML = `<table><tr><th>Item</th><th>Kind</th><th>Qty</th></tr>${o.unmet.map((u) => `<tr><td>${u.item}</td><td>${u.kind}</td><td>${u.qty}</td></tr>`).join('')}</table>`;
 };
 init().then(loadMemory);
+
+async function loadRestock() {
+  const st = await api('/api/state');
+  $('#rs-product').innerHTML = st.products.map((p) => `<option value="${p.id}">${p.name} (stock ${p.stock})</option>`).join('');
+  const ns = await api('/api/notifications');
+  $('#notifs').innerHTML = ns.length ? ns.map((n) => `<div class="step"><span class="tag-code">To ${n.retailer.replace(/</g, '&lt;')}</span>${n.message.replace(/</g, '&lt;')}</div>`).join('') : '<p class="note">No back-in-stock messages sent yet.</p>';
+}
+$('#rs-go').onclick = async () => { await api('/api/restock', { product_id: Number($('#rs-product').value), qty: Number($('#rs-qty').value) }); loadRestock(); };
+document.querySelector('[data-tab="owner"]').addEventListener('click', loadRestock);

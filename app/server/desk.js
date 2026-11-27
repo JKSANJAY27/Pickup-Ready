@@ -192,10 +192,31 @@ export class Desk {
   }
 
   reset() {
-    for (const t of ['orders', 'order_lines', 'unmet_demand', 'brand_memory', 'vocab_memory']) this.db.exec(`DELETE FROM ${t}`);
+    for (const t of ['notifications', 'orders', 'order_lines', 'unmet_demand', 'brand_memory', 'vocab_memory']) this.db.exec(`DELETE FROM ${t}`);
     this.db.exec('DELETE FROM products'); this.db.exec('DELETE FROM retailers');
     this.sessions.clear();
     seedAll(this.db);
+  }
+
+  // Owner restocks a product: code notifies each retailer who asked for it while it was out. Each request is notified once.
+  restock(productId, qty) {
+    const p = this.product(productId);
+    if (!p || !(qty > 0)) return null;
+    const before = p.stock;
+    this.db.prepare('UPDATE products SET stock = stock + ? WHERE id=?').run(qty, productId);
+    const waiting = before <= 0 ? this.db.prepare(`SELECT u.* FROM unmet_demand u WHERE u.product_id=? AND u.kind IN ('out_of_stock','declined_substitute')
+      AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.retailer_id=u.retailer_id AND n.product_id=u.product_id) GROUP BY u.retailer_id`).all(productId) : [];
+    const sent = [];
+    for (const u of waiting) {
+      const message = `${p.name} is back in stock (${before + qty} available). You asked for it earlier. Call to reserve.`;
+      this.db.prepare('INSERT INTO notifications (unmet_id, retailer_id, product_id, message, created_at) VALUES (?,?,?,?,?)').run(u.id, u.retailer_id, productId, message, now());
+      sent.push({ retailer_id: u.retailer_id, message });
+    }
+    return { product: p.name, stock: before + qty, notified: sent.length };
+  }
+
+  notifications() {
+    return this.db.prepare('SELECT n.*, r.name retailer FROM notifications n JOIN retailers r ON r.id=n.retailer_id ORDER BY n.id DESC').all();
   }
 
   // Owner answers are computed from records; the model never invents a total.
