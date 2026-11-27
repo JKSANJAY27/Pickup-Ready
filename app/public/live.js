@@ -37,6 +37,7 @@
       else if (ev.type === 'interrupted') stopPlayback();
       hooks(ev); };
   };
+  window.liveDrainMs = () => Math.max(0, (nextT - (playCtx?.currentTime || 0)) * 1000);
   window.stopLive = async () => {
     active = false; es?.close(); node?.disconnect(); stream?.getTracks().forEach((t) => t.stop()); stopPlayback();
     ctx?.close(); playCtx?.close(); if (sid) await fetch(`/api/live/stop?session=${sid}`, { method: 'POST' }); sid = null;

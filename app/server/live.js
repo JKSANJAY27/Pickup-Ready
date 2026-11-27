@@ -13,7 +13,7 @@ export class LiveSession {
     Object.assign(this, { agent, retailerId, emit });
     this.desk = agent.desk;
     this.s = newSession(retailerId);
-    this.inBuf = ''; this.outBuf = ''; this.trace = []; this.ready = false; this.closed = false;
+    this.inBuf = ''; this.outBuf = ''; this.endAfterGoodbye = false; this.trace = []; this.ready = false; this.closed = false;
     this.ws = connect(`${URL_BASE}?key=${encodeURIComponent(key)}`);
     this.ws.onopen = () => this.send({ setup: {
       model: `models/${liveModel()}`,
@@ -27,7 +27,7 @@ export class LiveSession {
   }
   send(o) { try { this.ws.send(JSON.stringify(o)); } catch { /* socket closed */ } }
   audio(buf) { if (this.ready && !this.closed) this.send({ realtimeInput: { audio: { data: Buffer.from(buf).toString('base64'), mimeType: 'audio/pcm;rate=16000' } } }); }
-  // The retailer's words (from Gemini's input transcription) arm the aama gate. If the transcript is missing or says no, the gate stays shut.
+  // Each retailer utterance (Gemini's input transcription) counts as a new turn. confirm_order needs a turn after the read-back.
   armGate() {
     if (!this.inBuf.trim()) return;
     startTurn(this.s, this.inBuf.trim());
@@ -46,7 +46,10 @@ export class LiveSession {
       if (sc.outputTranscription?.text) { this.armGate(); this.outBuf += sc.outputTranscription.text; this.emit({ type: 'desk_text', text: this.outBuf }); }
       for (const p of sc.modelTurn?.parts || []) if (p.inlineData?.data) { this.armGate(); this.emit({ type: 'audio', data: p.inlineData.data, mime: p.inlineData.mimeType }); }
       if (sc.interrupted) { this.flush(); this.emit({ type: 'interrupted' }); }
-      if (sc.turnComplete) { this.flush(); this.emit({ type: 'turn_complete' }); }
+      if (sc.turnComplete) {
+        this.flush(); this.emit({ type: 'turn_complete' });
+        if (this.endAfterGoodbye) { this.emit({ type: 'call_ended' }); this.close(); }
+      }
     }
     if (m.toolCall) {
       this.armGate();
@@ -58,6 +61,7 @@ export class LiveSession {
       }
       this.emit({ type: 'trace', trace: this.trace.splice(0) });
       this.send({ toolResponse: { functionResponses: responses } });
+      if (this.s.ended) { this.endAfterGoodbye = true; setTimeout(() => { if (!this.closed) { this.emit({ type: 'call_ended' }); this.close(); } }, 10000).unref?.(); } // close after the goodbye turn completes (10 s fallback)
     }
   }
   close() { this.closed = true; try { this.ws.close(); } catch { /* already closed */ } }

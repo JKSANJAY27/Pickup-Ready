@@ -1,6 +1,6 @@
 // The AI's only hands: every tool runs deterministic Desk code. The model proposes, this code decides.
 // Gates are enforced here, not in the prompt.
-import { norm, isYes } from './interpreter.js';
+import { norm } from './interpreter.js';
 
 const row = (p) => ({ product_id: p.id, name: p.name, price: p.price, stock: p.stock });
 
@@ -13,10 +13,12 @@ export const TOOL_DECLARATIONS = [
     parameters: { type: 'OBJECT', properties: { product_id: { type: 'INTEGER' }, qty: { type: 'INTEGER' } }, required: ['product_id', 'qty'] } },
   { name: 'propose_order', description: 'Build the pending order from resolved product ids and quantities. Checks stock and returns the exact read-back lines and total to say to the retailer. Does NOT reserve.',
     parameters: { type: 'OBJECT', properties: { lines: { type: 'ARRAY', items: { type: 'OBJECT', properties: { product_id: { type: 'INTEGER' }, qty: { type: 'INTEGER' } }, required: ['product_id', 'qty'] } } }, required: ['lines'] } },
-  { name: 'confirm_order', description: 'Reserve the pending order. Only works if the retailer\'s latest message is a clear yes (aama) to your read-back.', parameters: { type: 'OBJECT', properties: {} } },
+  { name: 'confirm_order', description: 'Reserve the pending order. Call it ONLY after you read the order and total back and the retailer then clearly agreed, in any words (aama, sari, ok, correct, yes). If their reply is unclear, a question, or silence, do not call it: ask again. Pass their confirming words in retailer_said.',
+    parameters: { type: 'OBJECT', properties: { retailer_said: { type: 'STRING', description: 'the retailer\'s own words that you judged to be a clear confirmation' } }, required: ['retailer_said'] } },
+  { name: 'end_call', description: 'Hang up. Call it when the order is finished and you have said goodbye, or when the retailer says bye or wants to stop. Say your goodbye in the same turn.', parameters: { type: 'OBJECT', properties: {} } },
   { name: 'cancel_order', description: 'Drop the pending order when the retailer says no (illa).', parameters: { type: 'OBJECT', properties: {} } },
-  { name: 'save_word', description: 'Remember that this retailer\'s own word means a product. Only works if the retailer\'s latest message is a clear yes to "should I save X as Y?". Ask first.',
-    parameters: { type: 'OBJECT', properties: { term: { type: 'STRING' }, product_id: { type: 'INTEGER' } }, required: ['term', 'product_id'] } },
+  { name: 'save_word', description: 'Remember that this retailer\'s own word means a product. Ask first ("should I save X as Y?") and call this only after the retailer clearly agrees, in any words. Pass their words in retailer_said.',
+    parameters: { type: 'OBJECT', properties: { term: { type: 'STRING' }, product_id: { type: 'INTEGER' }, retailer_said: { type: 'STRING' } }, required: ['term', 'product_id', 'retailer_said'] } },
   { name: 'remember_brand', description: 'Remember which product this retailer means by a category word (for example "oil"). Only works if the retailer\'s latest message names that product.',
     parameters: { type: 'OBJECT', properties: { category: { type: 'STRING' }, product_id: { type: 'INTEGER' } }, required: ['category', 'product_id'] } },
   { name: 'report_not_carried', description: 'Record that the retailer asked for something we do not carry, after they said it is not a product we have.',
@@ -24,9 +26,10 @@ export const TOOL_DECLARATIONS = [
 ];
 
 export function newSession(retailerId) {
-  return { retailerId, contents: [], pending: null, lastUser: '', yesAvailable: false, seen: new Set(), transcript: [] };
+  return { retailerId, contents: [], pending: null, lastUser: '', turn: 0, proposedTurn: -1, askedTurn: -1, ended: false, seen: new Set(), transcript: [] };
 }
-export function startTurn(s, text) { s.lastUser = text; s.yesAvailable = isYes(text); }
+// Called once per retailer utterance. No word is matched here: the model judges what the retailer meant.
+export function startTurn(s, text) { s.lastUser = text; s.turn++; }
 
 export function runTool(desk, s, name, args = {}, trace = []) {
   const T = (text, extra = {}) => trace.push({ who: 'code', text, ...extra });
@@ -35,6 +38,7 @@ export function runTool(desk, s, name, args = {}, trace = []) {
     case 'lookup_item': {
       const term = norm(String(args.term || ''));
       const r = desk.resolve(s.retailerId, term);
+      if (r.kind === 'none' || r.kind === 'ask') s.askedTurn = s.turn;
       if (r.kind === 'none') {
         const suggestions = desk.suggest(term);
         T(`"${term}" is not a word I know. Not guessing.${suggestions.length ? ` Closest in-stock catalogue items: ${suggestions.map((x) => x.name).join(', ')}` : ' No close catalogue item'}`, { confidence: 0, unsure: true });
@@ -73,25 +77,33 @@ export function runTool(desk, s, name, args = {}, trace = []) {
       }
       if (!items.length) { s.pending = null; T('Nothing could be proposed: every line was unavailable', { unsure: true }); return { error: 'no valid lines', unavailable }; }
       const total = items.reduce((a, i) => a + i.qty * i.product.price, 0);
-      s.pending = { items, total };
-      T(`Proposed order ready: ${items.map((i) => `${i.qty} x ${i.product.name}`).join(', ')}, total ₹${total}. Waiting for the retailer's aama`);
-      return { readback: items.map((i) => ({ qty: i.qty, name: i.product.name, line_total: i.qty * i.product.price })), total, unavailable, capped, next: 'read this back and ask for aama' };
+      s.pending = { items, total }; s.proposedTurn = s.turn;
+      T(`Proposed order ready: ${items.map((i) => `${i.qty} x ${i.product.name}`).join(', ')}, total ₹${total}. Waiting for the retailer to confirm`);
+      return { readback: items.map((i) => ({ qty: i.qty, name: i.product.name, line_total: i.qty * i.product.price })), total, unavailable, capped, next: 'read this back and ask the retailer to confirm; call confirm_order only after a clear agreement in a LATER message' };
     }
     case 'confirm_order': {
+      // The model judges whether the retailer agreed. Code only enforces the structure: a pending order, a stated confirmation,
+      // and at least one new retailer message since the read-back. No order can be reserved without this tool call (fail closed).
       if (!s.pending) return { error: 'there is no pending order' };
-      if (!s.yesAvailable) { T('Refused: the retailer has not said aama to the read-back', { unsure: true }); return { error: 'retailer has not said yes in their latest message. Ask them to confirm.' }; }
-      s.yesAvailable = false;
+      const said = String(args.retailer_said || '').trim();
+      if (!said) { T('Refused: no confirming words from the retailer were given', { unsure: true }); return { error: 'retailer_said is required. Ask the retailer to confirm and wait.' }; }
+      if (s.turn <= s.proposedTurn) { T('Refused: the retailer has not replied since the read-back', { unsure: true }); return { error: 'the retailer has not replied since the read-back. Read it back, then wait for their answer.' }; }
       const r = desk.reserve({ retailerId: s.retailerId, items: s.pending.items, mode: 'agent' });
       s.pending = null;
-      T(`Retailer said aama. Code reserved the order #${r.order_id} and reduced stock`);
+      T(`AI judged the retailer confirmed ("${said.slice(0, 80)}"). Code reserved order #${r.order_id} and reduced stock`);
       return { order_id: r.order_id, status: 'reserved' };
+    }
+    case 'end_call': {
+      s.ended = true;
+      T(s.pending ? 'Call ended. The unconfirmed order was not reserved' : 'Call ended');
+      s.pending = null;
+      return { ended: true };
     }
     case 'cancel_order': { s.pending = null; T('Pending order dropped. Nothing reserved'); return { status: 'cancelled' }; }
     case 'save_word': {
       const p = desk.product(Number(args.product_id)); const term = norm(String(args.term || ''));
       if (!p || !term) return { error: 'bad term or product' };
-      if (!s.yesAvailable) { T(`Refused: not saving "${term}" until the retailer says aama`, { unsure: true }); return { error: 'retailer has not confirmed. Ask "should I save X as Y?" and wait for a yes.' }; }
-      s.yesAvailable = false;
+      if (!String(args.retailer_said || '').trim() || s.turn <= s.askedTurn) { T(`Refused: not saving "${term}" until the retailer has answered the question`, { unsure: true }); return { error: 'ask "should I save X as Y?", wait for their answer, then call with their words in retailer_said.' }; }
       desk.db.prepare('INSERT OR REPLACE INTO vocab_memory VALUES (?,?,?)').run(s.retailerId, term, p.id);
       T(`Learned: "${term}" = ${p.name} for this retailer`);
       return { saved: true };

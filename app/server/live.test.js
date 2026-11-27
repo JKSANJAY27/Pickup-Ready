@@ -32,25 +32,36 @@ test('live: setup carries tools, Tamil language and caller context; audio is rel
   assert.equal(ws.sent[1].realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
 });
 
-test('live: aama gate holds. Confirm is refused without a spoken yes, accepted after one', async () => {
+test('live: confirm needs a retailer reply after the read-back, then works with natural words', async () => {
   const { ws, desk } = setup();
   await ws.push({ setupComplete: {} });
   said(ws, '5 sakkarai venum');
   await tool(ws, 'propose_order', { lines: [{ product_id: 9, qty: 5 }] });
-  await tool(ws, 'confirm_order', {});            // retailer has not said yes
-  assert.ok(lastResp(ws).error || lastResp(ws).status !== 'reserved');
+  await tool(ws, 'confirm_order', { retailer_said: 'sari' });   // model confirms with no reply from the retailer yet
+  assert.ok(lastResp(ws).error);
   assert.equal(desk.orders().length, 0);
-  said(ws, 'aama');
-  await tool(ws, 'confirm_order', {});
+  said(ws, 'seri pannunga');                                      // the retailer's reply, any words
+  await tool(ws, 'confirm_order', { retailer_said: 'seri pannunga' });
   assert.equal(lastResp(ws).status, 'reserved');
   assert.equal(desk.orders().length, 1);
 });
 
-test('live: no transcript at all keeps the gate shut (fail closed)', async () => {
+test('live: end_call closes the session after the goodbye turn completes', async () => {
+  const { ws, events } = setup();
+  await ws.push({ setupComplete: {} });
+  said(ws, 'bye');
+  await tool(ws, 'end_call', {});
+  assert.ok(!events.some((e) => e.type === 'call_ended'));      // goodbye still playing
+  await ws.push({ serverContent: { turnComplete: true } });
+  assert.ok(events.some((e) => e.type === 'call_ended'));
+  assert.ok(events.some((e) => e.type === 'closed'));
+});
+
+test('live: confirm without any retailer message is refused (fail closed)', async () => {
   const { ws, desk } = setup();
   await ws.push({ setupComplete: {} });
   await tool(ws, 'propose_order', { lines: [{ product_id: 9, qty: 1 }] });
-  await tool(ws, 'confirm_order', {});
+  await tool(ws, 'confirm_order', { retailer_said: 'sari' });
   assert.equal(desk.orders().length, 0);
 });
 

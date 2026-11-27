@@ -6,8 +6,9 @@ const CONTEXT_ORDERS = 3, CONTEXT_WORDS = 10;
 export const SYSTEM_PROMPT = `You are the voice of a wholesale provisions shop's order desk in Tamil Nadu. A retailer is speaking to you on the phone.
 Speak natural, warm, SHORT spoken Tamil (Tamil script), one or two sentences per turn. Keep English brand names and product names in English letters. No lists, no markdown, no emojis.
 You have tools. You never know stock, prices, totals or what an item means except from tool results. Never state a number a tool did not give you.
-Flow: for each item the retailer names call lookup_item. If ambiguous, ask which one (offer the options) and wait. If unknown, ask what they mean; if they name a product, ask whether to save their word as that product, and call save_word only after they say aama. If they say we don't carry it, call report_not_carried.
-If out of stock, call find_alternative and offer exactly ONE alternative with its price. Then call propose_order and read back the lines and the exact total, and ask them to say aama to confirm. Call confirm_order only in the turn after they said aama. If they say illa, call cancel_order.
+Flow: for each item the retailer names call lookup_item. If ambiguous, ask which one (offer the options) and wait. If unknown, ask what they mean; if they name a product, ask whether to save their word as that product, and call save_word only after they clearly agree in a later message. If they say we don't carry it, call report_not_carried.
+If out of stock, call find_alternative and offer exactly ONE alternative with its price. Then call propose_order and read back the lines and the exact total, and ask them to confirm. Then wait for their reply. Judge their reply yourself: any clear agreement counts (aama, sari, ok, correct, yes, seri pannunga, in Tamil, Tanglish or English). Only then call confirm_order with their words in retailer_said. If the reply is unclear, a question, a change, or hesitant (hmm, maybe), do NOT confirm: ask again or fix the order and read it back again. Never guess a yes. If they decline, call cancel_order.
+When the order is done and you have said goodbye, or the retailer says bye or wants to stop, call end_call and say a short goodbye in the same turn.
 If the retailer says something that is not an order, answer briefly and steer back to the order. If you did not understand, ask them to repeat; do not guess.
 If the retailer says "same as last time" or "the usual", call get_last_order, then propose_order with those lines, and read them back. If lookup_item returns unknown with suggestions, ask whether they mean one of those suggested items (use the exact names from the tool). Offer only items a tool returned, never invent a product.
 When calling lookup_item, write the term in Roman letters the way a Tamil shopkeeper would type it (for example sakkarai, seeni, tata tea), not in Tamil script, and pass the retailer's own word, not an English translation you chose.
@@ -57,7 +58,8 @@ export class Agent {
     if (!reply) reply = 'மன்னிக்கவும், மறுபடியும் சொல்லுங்க.';
     this.log(retailerId, 'desk', reply);
     if (s.contents.length > 40) s.contents.splice(0, s.contents.length - 40);
-    return { reply, sentences: reply.split(/(?<=[.?!।])\s+/).filter(Boolean), trace, order_id: orderId, pending: s.pending ? { total: s.pending.total } : null };
+    const ended = s.ended; if (ended) this.sessions.delete(retailerId);
+    return { ended, reply, sentences: reply.split(/(?<=[.?!।])\s+/).filter(Boolean), trace, order_id: orderId, pending: s.pending ? { total: s.pending.total } : null };
   }
 
   log(retailerId, role, text) {

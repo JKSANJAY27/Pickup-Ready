@@ -52,18 +52,25 @@ async function send(text) {
   renderTrace(r.trace || []);
   loadMemory();
   if (r.order_id) loadOrders();
+  if (r.ended) { if (!tamilVoice || !window.speechSynthesis) endCallUi(); else { speak(r.sentences, my, endCallUi); } return; }
   speak(r.sentences, my);
+}
+// The AI called end_call: stop listening, reset the button, show the state.
+function endCallUi() {
+  calling = false; rec?.abort?.(); stopSpeaking();
+  $('#mic').textContent = '🎤 Start call (Tamil)'; $('#status').textContent = 'call ended'; add('bot', '📞 Call ended');
 }
 
 // Voice out, sentence by sentence, with generation ids so an interruption drops the rest.
-function speak(sentences, my) {
+function speak(sentences, my, onDone) {
   if (!tamilVoice || !window.speechSynthesis) return;
   speaking = true; $('#status').textContent = 'Speaking...';
   if (!$('#headset').checked) rec?.abort?.();
   sentences.forEach((t, i) => {
     const u = new SpeechSynthesisUtterance(t);
     u.voice = tamilVoice; u.lang = tamilVoice.lang;
-    u.onend = () => { if (my === gen && i === sentences.length - 1) { speaking = false; $('#status').textContent = calling ? 'Listening...' : ''; if (calling) listen(); } };
+    u.onend = () => { if (my === gen && i === sentences.length - 1 && onDone) return onDone();
+    if (my === gen && i === sentences.length - 1) { speaking = false; $('#status').textContent = calling ? 'Listening...' : ''; if (calling) listen(); } };
     speechSynthesis.speak(u);
   });
 }
@@ -149,6 +156,7 @@ $('#live').onclick = async () => {
       }
       if (ev.type === 'turn_complete') liveBubble = { me: null, bot: null };
       if (ev.type === 'trace') renderTrace(ev.trace);
+      if (ev.type === 'call_ended') { $('#status').textContent = 'call ended'; setTimeout(async () => { await stopLive(); liveOn = false; $('#live').textContent = '🎙 Live voice call (speech-to-speech)'; $('#status').textContent = 'call ended'; add('bot', '📞 Call ended'); }, liveDrainMs() + 300); }
       if (ev.type === 'error' || ev.type === 'closed') $('#status').textContent = ev.message || 'call ended';
     });
     liveOn = true; $('#live').textContent = '⏹ End live call';

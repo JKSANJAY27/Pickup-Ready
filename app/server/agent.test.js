@@ -10,46 +10,100 @@ const say = (text) => ({ role: 'model', parts: [{ text }] });
 const scripted = (...turns) => { let i = 0; return { generate: async () => turns[i++] }; };
 const setup = (...turns) => { const d = new Desk(openDb(':memory:')); return { d, a: new Agent(d, scripted(...turns)) }; };
 
-test('tool-only: order reserved after aama, stock reduced by code', async () => {
+test('tool-only: order reserved after a natural-language confirmation, stock reduced by code', async () => {
   const { d, a } = setup(
     call('lookup_item', { term: 'sakkarai', qty: 5 }), call('propose_order', { lines: [{ product_id: 9, qty: 5 }] }), say('ஆர்டர் படிக்கிறேன். ஆமா சொல்லுங்க.'),
-    call('confirm_order', {}), say('பதிவு செய்தாச்சு.'));
+    call('confirm_order', { retailer_said: 'seri pannunga' }), say('பதிவு செய்தாச்சு.'));
   let r = await a.turn(1, '5 sakkarai venum');
   assert.equal(d.orders().length, 0);
   assert.equal(r.pending.total, 230);
-  r = await a.turn(1, 'aama');
+  r = await a.turn(1, 'seri pannunga');
   assert.equal(r.order_id, 1);
   assert.equal(d.product(9).stock, 195);
   assert.ok(r.trace.some((t) => t.who === 'ai') && r.trace.some((t) => t.who === 'code'));
 });
 
-test('gate: confirm_order is refused unless the latest message is a yes', async () => {
+test('gate: confirm_order is refused in the same turn as the read-back (no reply from the retailer yet)', async () => {
   const { d, a } = setup(
-    call('propose_order', { lines: [{ product_id: 9, qty: 5 }] }), say('ஆமா?'),
-    call('confirm_order', {}), say('சரி.'));   // model tries to confirm although the retailer said something else
-  await a.turn(1, '5 sakkarai');
-  const r = await a.turn(1, 'enna rate');
+    call('propose_order', { lines: [{ product_id: 9, qty: 5 }] }), call('confirm_order', { retailer_said: 'sari' }), say('சரி.'));
+  const r = await a.turn(1, '5 sakkarai');
   assert.equal(d.orders().length, 0);
   assert.equal(d.product(9).stock, 200);
-  assert.ok(r.trace.some((t) => /Refused/.test(t.text)));
+  assert.ok(r.trace.some((t) => /Refused: the retailer has not replied/.test(t.text)));
 });
 
-test('gate: one aama cannot both save a word and confirm an order', async () => {
+test('gate: confirm_order needs the confirming words and a pending order; reserve is impossible any other way', async () => {
   const { d, a } = setup(
-    call('propose_order', { lines: [{ product_id: 9, qty: 1 }] }), say('ஆமா?'),
-    call('save_word', { term: 'vellai', product_id: 9 }), call('confirm_order', {}), say('சரி.'));
+    call('confirm_order', { retailer_said: 'sari' }), say('x'),
+    call('propose_order', { lines: [{ product_id: 9, qty: 5 }] }), say('ok?'),
+    call('confirm_order', {}), say('x'));
+  let r = await a.turn(1, 'sari');
+  assert.ok(r.trace.length === 1 || d.orders().length === 0);
+  await a.turn(1, '5 sakkarai');
+  r = await a.turn(1, 'hmm');                       // model calls confirm without any words
+  assert.equal(d.orders().length, 0);
+  assert.ok(r.trace.some((t) => /no confirming words/.test(t.text)));
+  assert.equal(d.db.prepare('SELECT count(*) n FROM orders').get().n, 0);
+});
+
+// A tiny stand-in for the model's judgement, so the tests can show what the CODE does with each decision.
+// (Whether the real model judges well is checked in live runs, not here.)
+const AFFIRM = /(sari|seri|ok|okay|correct|yes|aama|ஆமா|சரி|pannunga|podunga)/i;
+const judge = () => reactive((contents) => {
+  const res = contents.at(-1).parts?.[0]?.functionResponse; // only a result from THIS round
+  const said = lastUserText(contents) || '';
+  if (res?.name === 'confirm_order') return say(res.response.status === 'reserved' ? 'பதிவு செய்தாச்சு. நன்றி.' : 'மறுபடியும் சொல்லுங்க.');
+  if (res?.name === 'propose_order') return say('5 Sugar, 230 ரூபாய். சரியா?');
+  if (/sakkarai/.test(said)) return call('propose_order', { lines: [{ product_id: 9, qty: 5 }] });
+  if (AFFIRM.test(said) && !/hmm|maybe/i.test(said)) return call('confirm_order', { retailer_said: said });
+  return say('தெளிவா சொல்லுங்க, ஆர்டர் போடவா?');   // unclear: ask again, never guess a yes
+});
+
+test('natural phrasing confirms: sari / ok / correct pannunga / Tamil script, no magic word', async () => {
+  for (const phrase of ['sari', 'ok podunga', 'correct pannunga', 'சரி']) {
+    const d = new Desk(openDb(':memory:')); const a = new Agent(d, judge());
+    await a.turn(1, '5 sakkarai');
+    const r = await a.turn(1, phrase);
+    assert.equal(r.order_id, 1, phrase);
+    assert.ok(r.trace.some((t) => /AI judged the retailer confirmed/.test(t.text)));
+  }
+});
+
+test('ambiguous or absent affirmation: nothing reserved, the AI asks again', async () => {
+  const d = new Desk(openDb(':memory:')); const a = new Agent(d, judge());
+  await a.turn(1, '5 sakkarai');
+  for (const phrase of ['hmm', 'maybe', 'enna rate']) {
+    const r = await a.turn(1, phrase);
+    assert.equal(r.order_id, null, phrase);
+  }
+  assert.equal(d.product(9).stock, 200);
+});
+
+test('end_call: the session ends, the pending order is not reserved, and the next call starts fresh', async () => {
+  const d = new Desk(openDb(':memory:'));
+  const a = new Agent(d, scripted(call('propose_order', { lines: [{ product_id: 9, qty: 1 }] }), say('ok?'), call('end_call', {}), say('வணக்கம்.'), say('hi')));
   await a.turn(1, '1 sakkarai');
-  const r = await a.turn(1, 'aama');
-  assert.equal(d.memory().vocab.length, 1);
-  assert.equal(d.orders().length, 0); // the yes was spent on save_word
-  assert.ok(r.trace.some((t) => /Refused/.test(t.text)));
+  const r = await a.turn(1, 'bye');
+  assert.equal(r.ended, true);
+  assert.equal(d.orders().length, 0);
+  assert.ok(r.trace.some((t) => /Call ended/.test(t.text)));
+  assert.equal(a.sessions.has(1), false);
 });
 
-test('save_word refused without a yes; remember_brand needs the product named', async () => {
+test('save_word needs a reply after the question, and the retailer\'s words', async () => {
   const { d, a } = setup(
-    call('save_word', { term: 'vellai', product_id: 9 }), call('remember_brand', { category: 'oil', product_id: 2 }), say('சரி.'));
-  await a.turn(1, 'vellai venum');
+    call('lookup_item', { term: 'vellai', qty: 1 }), call('save_word', { term: 'vellai', product_id: 9, retailer_said: 'sari' }), say('சரி.'),
+    call('save_word', { term: 'vellai', product_id: 9, retailer_said: 'aama' }), say('சேமிச்சாச்சு.'));
+  let r = await a.turn(1, 'vellai venum');          // asked in the same turn: refused
   assert.equal(d.memory().vocab.length, 0);
+  assert.ok(r.trace.some((t) => /Refused: not saving/.test(t.text)));
+  await a.turn(1, 'aama, sakkarai');                // retailer answered: saved
+  assert.equal(d.memory().vocab.length, 1);
+});
+
+test('remember_brand still needs the product named', async () => {
+  const { d, a } = setup(call('remember_brand', { category: 'oil', product_id: 2 }), say('சரி.'));
+  await a.turn(1, 'vellai venum');
   assert.equal(d.memory().brands.length, 0);
 });
 
@@ -100,7 +154,7 @@ const lastUserText = (contents) => [...contents].reverse().find((c) => c.role ==
 test('same as last time: reproduces the previous order lines from SQLite', async () => {
   const d = new Desk(openDb(':memory:'));
   const a = new Agent(d, scripted(
-    call('propose_order', { lines: [{ product_id: 9, qty: 5 }, { product_id: 11, qty: 2 }] }), say('ஆமா?'), call('confirm_order', {}), say('சரி.')));
+    call('propose_order', { lines: [{ product_id: 9, qty: 5 }, { product_id: 11, qty: 2 }] }), say('ஆமா?'), call('confirm_order', { retailer_said: 'seri pannunga' }), say('சரி.')));
   await a.turn(1, '5 sakkarai 2 tata tea'); await a.turn(1, 'aama');
   assert.equal(d.orders().length, 1);
   // second call: the model asks for the last order, then proposes exactly those lines
@@ -161,7 +215,7 @@ test('agent offers a real alternative for a non-catalogue item', async () => {
   assert.equal(none.reply, 'Illa.');
 });
 
-test('Tamil-script yes words count as yes (combining marks survive normalisation)', async () => {
+test('(scripted desk only) Tamil-script yes words count as yes (combining marks survive normalisation)', async () => {
   const { isYes } = await import('./interpreter.js');
   for (const w of ['ஆமா', 'ஆம்', 'சரி', 'ஆமா, சரிங்க']) assert.ok(isYes(w), w);
   assert.ok(!isYes('இல்ல'));

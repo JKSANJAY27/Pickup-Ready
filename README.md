@@ -73,7 +73,7 @@ cd app && node --no-warnings server/index.js     # http://localhost:3000
    - **Start call (Tamil)**: Chrome listens (ta-IN), Gemini answers, your browser speaks the reply. Use Chrome. Or
    - **Live voice call (speech-to-speech)**: Gemini Live handles the audio both ways. Use headphones to avoid echo. Or
    - type in the box.
-   Allow the microphone when Chrome asks. Say "aama" to confirm an order; nothing is reserved before that.
+   Allow the microphone when Chrome asks. Confirm an order in your own words (aama, sari, ok, anything clear); nothing is reserved until the AI judges you clearly agreed to the read-back. Say bye and the AI ends the call by itself.
 
 | Variable | Needed? | Meaning |
 |---|---|---|
