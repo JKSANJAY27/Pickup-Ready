@@ -192,7 +192,7 @@ export class Desk {
   }
 
   reset() {
-    for (const t of ['notifications', 'orders', 'order_lines', 'unmet_demand', 'brand_memory', 'vocab_memory']) this.db.exec(`DELETE FROM ${t}`);
+    for (const t of ['call_transcripts', 'notifications', 'orders', 'order_lines', 'unmet_demand', 'brand_memory', 'vocab_memory']) this.db.exec(`DELETE FROM ${t}`);
     this.db.exec('DELETE FROM products'); this.db.exec('DELETE FROM retailers');
     this.sessions.clear();
     seedAll(this.db);

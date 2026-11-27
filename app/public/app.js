@@ -8,11 +8,20 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   if (b.dataset.tab === 'packer') loadOrders();
 });
 
+let cfg = { live_ai: false };
+let calling = false, speaking = false, gen = 0, rec = null, tamilVoice = null;
+
 async function init() {
-  const cfg = await api('/api/config');
-  $('#ai').textContent = cfg.live_ai ? 'Live AI on' : 'AI key not set: scripted sample, not live AI';
+  cfg = await api('/api/config');
+  $('#ai').textContent = cfg.live_ai ? `Live AI on (${cfg.model})` : 'AI key not set';
+  $('#keynote').hidden = cfg.live_ai;
   retailers = (await api('/api/state')).retailers;
   $('#retailer').innerHTML = retailers.map((r) => `<option value="${r.id}">${r.name}, ${r.town}</option>`).join('');
+  pickVoice(); if (window.speechSynthesis) speechSynthesis.onvoiceschanged = pickVoice;
+}
+function pickVoice() {
+  tamilVoice = (window.speechSynthesis?.getVoices() || []).find((v) => v.lang.toLowerCase().startsWith('ta')) || null;
+  $('#voicenote').textContent = tamilVoice ? `Voice out: ${tamilVoice.name}` : 'No Tamil voice on this device: replies show as captions only';
 }
 
 function add(who, ta, en) {
@@ -21,16 +30,68 @@ function add(who, ta, en) {
   d.innerHTML = en ? `${ta}<small>${en}</small>` : ta;
   $('#log').append(d); $('#log').scrollTop = 1e9;
 }
+const esc = (t) => String(t).replace(/</g, '&lt;');
+
 async function send(text) {
-  if (!text.trim()) return;
-  add('me', text.replace(/</g, '&lt;'));
-  const r = await api('/api/call/turn', { retailer_id: Number($('#retailer').value), text });
-  add('bot', r.reply_ta, r.reply_en);
-  $('#mode').textContent = r.mode === 'live_ai' ? 'Interpreted by live AI' : 'Scripted sample, not live AI';
+  text = text.trim();
+  if (!text) return;
+  if (!cfg.live_ai) return add('bot', 'Key not set. Add GEMINI_API_KEY to enable the call.');
+  stopSpeaking();
+  const my = ++gen;
+  add('me', esc(text));
+  $('#status').textContent = 'Thinking...';
+  let r;
+  try {
+    const res = await fetch('/api/agent/turn', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ retailer_id: Number($('#retailer').value), text }) });
+    r = await res.json();
+    if (!res.ok) { $('#status').textContent = ''; return add('bot', res.status === 503 ? 'Key not set.' : `AI error: ${esc(r.message || r.error)}`); }
+  } catch { $('#status').textContent = ''; return add('bot', 'Could not reach the server.'); }
+  if (my !== gen) return; // a newer turn started (interruption): drop this stale reply
+  $('#status').textContent = '';
+  add('bot', esc(r.reply));
   renderTrace(r.trace || []);
   loadMemory();
-  if (r.done && r.order_id) loadOrders();
+  if (r.order_id) loadOrders();
+  speak(r.sentences, my);
 }
+
+// Voice out, sentence by sentence, with generation ids so an interruption drops the rest.
+function speak(sentences, my) {
+  if (!tamilVoice || !window.speechSynthesis) return;
+  speaking = true; $('#status').textContent = 'Speaking...';
+  if (!$('#headset').checked) rec?.abort?.();
+  sentences.forEach((t, i) => {
+    const u = new SpeechSynthesisUtterance(t);
+    u.voice = tamilVoice; u.lang = tamilVoice.lang;
+    u.onend = () => { if (my === gen && i === sentences.length - 1) { speaking = false; $('#status').textContent = calling ? 'Listening...' : ''; if (calling) listen(); } };
+    speechSynthesis.speak(u);
+  });
+}
+function stopSpeaking() { speaking = false; window.speechSynthesis?.cancel(); }
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function listen() {
+  if (!SR || !calling) return;
+  rec = new SR(); rec.lang = 'ta-IN'; rec.continuous = false; rec.interimResults = false;
+  rec.onspeechstart = () => { if (speaking) { stopSpeaking(); gen++; $('#status').textContent = 'Interrupted, listening...'; } };
+  rec.onresult = (e) => { send(e.results[0][0].transcript); };
+  rec.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') add('bot', 'Could not hear that. Please repeat, or type.'); };
+  rec.onend = () => { if (calling && !speaking && $('#status').textContent !== 'Thinking...') setTimeout(listen, 200); };
+  try { rec.start(); $('#status').textContent = 'Listening...'; } catch { /* already started */ }
+}
+$('#mic').onclick = () => {
+  if (!SR) return add('bot', 'Speech recognition is not available in this browser. Use Chrome, or type.');
+  calling = !calling;
+  $('#mic').textContent = calling ? '⏹ End call' : '🎤 Start call (Tamil)';
+  if (calling) listen(); else { rec?.abort?.(); stopSpeaking(); $('#status').textContent = ''; }
+};
+$('#send').onclick = () => { const t = $('#text').value; $('#text').value = ''; send(t); };
+$('#text').onkeydown = (e) => { if (e.key === 'Enter') $('#send').click(); };
+$('#transcript-btn').onclick = async () => {
+  const t = await api('/api/transcripts');
+  $('#transcript').textContent = t.length ? t.map((x) => `${x.retailer} | ${x.role}: ${x.text}`).join('\n') : 'No calls recorded yet.';
+};
+
 const LABEL = { ai: 'AI proposes', scripted: 'Scripted', code: 'Code decides', human: 'Retailer gate', learn: 'Learned' };
 function renderTrace(steps) {
   if (!steps.length) return;
@@ -45,19 +106,7 @@ async function loadMemory() {
   const rows = [...m.vocab.map((v) => `${v.retailer}: "${v.term}" means ${v.product}`), ...m.brands.map((b) => `${b.retailer}: ${b.category} is always ${b.product}`)];
   $('#memory').innerHTML = rows.length ? rows.map((r) => `<div class="step">${r.replace(/</g, '&lt;')}</div>`).join('') : '<p class="note">Nothing learned yet.</p>';
 }
-$('#reset').onclick = async () => { await api('/api/reset', {}); $('#log').innerHTML = ''; $('#trace').innerHTML = '<p class="note">Steps appear here as you talk.</p>'; loadMemory(); loadOrders(); };
-$('#send').onclick = () => { const t = $('#text').value; $('#text').value = ''; send(t); };
-$('#text').onkeydown = (e) => { if (e.key === 'Enter') $('#send').click(); };
-
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-$('#mic').onclick = () => {
-  if (!SR) return add('bot', 'Speech recognition is not available in this browser. Type instead.');
-  const rec = new SR(); rec.lang = 'ta-IN';
-  rec.onresult = (e) => send(e.results[0][0].transcript);
-  rec.onerror = () => add('bot', 'Could not hear that. Please repeat, or type.');
-  rec.start();
-};
-
+$('#reset').onclick = async () => { await api('/api/reset', {}); speechSynthesis.cancel(); $('#log').innerHTML = ''; $('#trace').innerHTML = '<p class="note">Steps appear here as you talk.</p>'; loadMemory(); loadOrders(); };
 async function loadOrders() {
   const orders = await api('/api/orders');
   $('#orders').innerHTML = orders.length ? orders.map((o) => `<div class="order"><b>Order #${o.id}</b> ${o.retailer} · ${o.status} · code ${o.pickup_code}

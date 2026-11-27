@@ -16,6 +16,8 @@ export function openDb(path = process.env.DB_PATH || './data/pickup.db') {
     CREATE TABLE IF NOT EXISTS order_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER, product_id INTEGER, qty INTEGER, price REAL);
     -- demand we could not meet: out_of_stock, not_carried, or declined_substitute
     CREATE TABLE IF NOT EXISTS unmet_demand (id INTEGER PRIMARY KEY AUTOINCREMENT, retailer_id INTEGER, term TEXT, product_id INTEGER, kind TEXT, qty INTEGER, created_at TEXT);
+    -- every call turn, both sides, so the owner can review conversations
+    CREATE TABLE IF NOT EXISTS call_transcripts (id INTEGER PRIMARY KEY AUTOINCREMENT, retailer_id INTEGER, role TEXT, text TEXT, created_at TEXT);
     -- back-in-stock messages sent to retailers; unmet_id keeps each request notified at most once
     CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, unmet_id INTEGER UNIQUE, retailer_id INTEGER, product_id INTEGER, message TEXT, created_at TEXT);
   `);
