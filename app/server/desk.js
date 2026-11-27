@@ -225,6 +225,16 @@ export class Desk {
     const sales = this.db.prepare("SELECT COALESCE(SUM(total),0) t, COUNT(*) n FROM orders").get();
     return { orders: sales.n, order_value: sales.t, unmet };
   }
+  // Restock insight: pure counting. Distinct retailers who asked for an item we could not sell in the last 7 days.
+  insights(days = 7) {
+    const since = new Date(Date.now() - days * 864e5).toISOString();
+    const rows = this.db.prepare(`SELECT COALESCE(p.name, u.term) item, u.kind, COUNT(DISTINCT u.retailer_id) retailers, SUM(u.qty) qty
+      FROM unmet_demand u LEFT JOIN products p ON p.id=u.product_id
+      WHERE u.kind IN ('not_carried','out_of_stock') AND u.created_at >= ? AND (p.id IS NULL OR p.stock <= 0)
+      GROUP BY item, u.kind ORDER BY retailers DESC, qty DESC LIMIT 5`).all(since);
+    return rows.map((r) => ({ ...r, text: `${r.retailers} ${r.retailers === 1 ? 'retailer' : 'retailers'} asked for ${r.item} in the last ${days} days (${r.kind === 'not_carried' ? 'not carried' : 'out of stock'}, ${r.qty} requested) - consider ${r.kind === 'not_carried' ? 'stocking' : 'restocking'} it` }));
+  }
+
   ownerAnswer() {
     const o = this.owner();
     const lost = o.unmet.filter((u) => u.kind !== 'declined_substitute');

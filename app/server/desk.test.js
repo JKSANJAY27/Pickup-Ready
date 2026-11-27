@@ -94,3 +94,18 @@ test('back-in-stock: waiting retailer notified once, others not', async () => {
   assert.equal(d.restock(7, 5).notified, 0); // already notified, and no longer out of stock
   assert.equal(d.restock(1, 5).notified, 0);
 });
+
+test('restock insight: counts distinct retailers, hides restocked items, ignores declined substitutes', async () => {
+  const d = fresh();
+  await d.turn(1, '2 urad dal'); await d.turn(1, 'illa');
+  await d.turn(2, '1 urad dal'); await d.turn(2, 'illa');
+  await d.turn(3, '1 dragon fruit'); await d.turn(3, 'illa');
+  let ins = d.insights();
+  const urad = ins.find((i) => i.item === 'Urad Dal 1kg');
+  assert.equal(urad.retailers, 2);
+  assert.match(urad.text, /2 retailers asked for Urad Dal 1kg/);
+  assert.ok(ins.some((i) => i.item === 'dragon fruit' && /stocking it/.test(i.text)));
+  assert.equal(ins[0].item, 'Urad Dal 1kg'); // most retailers first
+  d.restock(7, 10);
+  assert.ok(!d.insights().some((i) => i.item === 'Urad Dal 1kg')); // no longer out of stock
+});

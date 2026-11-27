@@ -70,6 +70,7 @@ async function loadOrders() {
 $('#ask').onclick = async () => {
   const o = await api('/api/owner');
   $('#answer').textContent = o.answer;
+  $('#insights').innerHTML = o.insights.length ? o.insights.map((i) => `<div class="step">${i.text.replace(/</g, '&lt;')}</div>`).join('') : '<p class="note">No unmet demand to act on.</p>';
   $('#owner-table').innerHTML = `<table><tr><th>Item</th><th>Kind</th><th>Qty</th></tr>${o.unmet.map((u) => `<tr><td>${u.item}</td><td>${u.kind}</td><td>${u.qty}</td></tr>`).join('')}</table>`;
 };
 init().then(loadMemory);

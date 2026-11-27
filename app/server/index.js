@@ -30,7 +30,7 @@ export function createApp(db = openDb()) {
       if (path === '/api/reset' && req.method === 'POST') { desk.reset(); return json(res, 200, { ok: true }); }
       if (path === '/api/restock' && req.method === 'POST') { const b = await body(req); const r = desk.restock(Number(b.product_id), Number(b.qty)); return r ? json(res, 200, r) : json(res, 400, { error: 'bad request' }); }
       if (path === '/api/notifications') return json(res, 200, desk.notifications());
-      if (path === '/api/owner') return json(res, 200, { ...desk.owner(), answer: desk.ownerAnswer() });
+      if (path === '/api/owner') return json(res, 200, { ...desk.owner(), answer: desk.ownerAnswer(), insights: desk.insights() });
       if (path.startsWith('/api/')) return json(res, 404, { error: 'not found' });
       const file = normalize(path === '/' ? '/index.html' : path).replace(/^(\.\.[/\\])+/, '');
       const full = join(PUBLIC, file);

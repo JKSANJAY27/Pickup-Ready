@@ -86,6 +86,8 @@ Expected: a bill appears: each line with its price, "Total ₹1332" (for the cas
 **16. Unmet demand answer.** Open the Owner tab and click **What did people want that I couldn't sell?**
 Expected: a sentence listing what could not be sold, for example "Urad Dal 1kg (2, out of stock); Brooke Bond Red Label Tea 1kg (1, out of stock); dragon fruit (1, not carried)", plus a table of items, kind, and quantity. The numbers must match what you did.
 
+**16a. Restock insight.** On the same Owner tab, under "Restock insights", expect lines such as "2 retailers asked for Urad Dal 1kg in the last 7 days (out of stock, 3 requested) - consider restocking it" and "1 retailer asked for dragon fruit in the last 7 days (not carried, 1 requested) - consider stocking it". Items are ordered by how many different retailers asked. After you restock an item in 16b and click the question button again, that item disappears from the insights.
+
 **16b. Back-in-stock.** In Restock, choose "Urad Dal 1kg", quantity 10, click **Restock**.
 Expected: a message appears: "To Selvi Provisions: Urad Dal 1kg is back in stock (10 available). You asked for it earlier. Call to reserve." Restock the same product again: no second message. Restock "Brooke Bond Red Label Tea 1kg": a message goes to Murugan Stores. Restock a product nobody asked for (for example Sugar 1kg): no message.
 
