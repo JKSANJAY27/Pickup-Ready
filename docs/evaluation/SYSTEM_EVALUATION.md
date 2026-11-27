@@ -7,7 +7,7 @@ Run it yourself:
 ```
 cd app
 node eval/run.js                      # metrics M1-M6, exits non-zero on any silent wrong guess or failed invariant
-node --test server/desk.test.js       # 7 scenario tests
+node --test server/desk.test.js       # 8 scenario tests
 ./smoke.sh http://localhost:3000      # against the running container
 ```
 
